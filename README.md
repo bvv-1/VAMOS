@@ -45,6 +45,8 @@ wrangler secret put LINE_CHANNEL_SECRET
 wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
 wrangler secret put BASIC_USERNAME
 wrangler secret put BASIC_PASSWORD
+wrangler secret put ELEVENLABS_API_KEY
+wrangler secret put GOOGLE_CLOUD_CREDENTIALS
 ```
 
 | 変数名 | 説明 |
@@ -53,6 +55,8 @@ wrangler secret put BASIC_PASSWORD
 | `LINE_CHANNEL_ACCESS_TOKEN` | LINE チャネルアクセストークン |
 | `BASIC_USERNAME` | 管理画面の Basic 認証ユーザー名 |
 | `BASIC_PASSWORD` | 管理画面の Basic 認証パスワード |
+| `ELEVENLABS_API_KEY` | ElevenLabs API キー |
+| `GOOGLE_CLOUD_CREDENTIALS` | Google Cloud サービスアカウント JSON (Base64) |
 
 ### R2 バケットの作成
 

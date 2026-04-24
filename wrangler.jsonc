@@ -21,7 +21,8 @@
 		}
 	],
 	"vars": {
-		"ADMIN_REALM": "VAMOS Admin"
+		"ADMIN_REALM": "VAMOS Admin",
+		"GOOGLE_CLOUD_PROJECT_ID": "vamos-prd"
 	},
 	"rules": [
 		{
