@@ -83,4 +83,24 @@ describe("VAMOS LINE Bot", () => {
 			expect(response.status).toBe(404);
 		});
 	});
+
+	describe("Voice conversion ( /api/voice-convert/*)", () => {
+		it("returns 404 for unknown sub-paths", async () => {
+			const response = await SELF.fetch(
+				"https://example.com/api/voice-convert/unknown"
+			);
+			expect(response.status).toBe(404);
+		});
+
+		it("responds to OPTIONS requests (CORS)", async () => {
+			const response = await SELF.fetch(
+				"https://example.com/api/voice-convert/voices",
+				{
+					method: "OPTIONS",
+				}
+			);
+			expect(response.status).toBe(200);
+			expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+		});
+	});
 });
