@@ -22,15 +22,65 @@
             cursor: crosshair;
             border: 1px solid #3f3f46;
             box-sizing: border-box;
+            touch-action: none;
         }
         input[type="range"] { accent-color: #3b82f6; }
+
+        /* タブスタイル */
+        .tab-btn { transition: all 0.2s; }
+        .tab-btn.active { background-color: #3b82f6; }
+        .tab-content { display: none; }
+        .tab-content.active { display: flex; flex-direction: column; }
+
+        /* プログレスバー */
+        .progress-bar {
+            height: 8px;
+            background: #27272a;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            transition: width 0.3s;
+        }
+
+        /* スピナー */
+        .spinner {
+            border: 3px solid #27272a;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* スマホ対応 */
+        @media (max-width: 768px) {
+            body { overflow-y: auto; overflow-x: hidden; }
+            #canvas-container {
+                height: auto;
+                min-height: 50vh;
+                overflow: hidden;
+            }
+            canvas {
+                height: 70vh;
+                width: auto;
+                touch-action: none;
+            }
+        }
     </style>
 </head>
-<body class="flex flex-row">
+<body class="flex flex-col md:flex-row">
 
     <div id="canvas-container" class="flex-grow relative">
         <canvas id="mainCanvas" width="1080" height="1920"></canvas>
-        
+        <input type="file" id="videoFileInput" accept="video/*" class="hidden">
+
         <!-- Video Controls (Top) -->
         <div id="videoControls" class="absolute top-4 left-1/2 -translate-x-1/2 w-full max-w-[500px] bg-black/80 p-4 rounded-lg flex flex-col gap-2 border border-zinc-700 backdrop-blur-sm">
             <div class="flex items-center gap-4">
@@ -41,55 +91,172 @@
         </div>
     </div>
 
-    <div class="w-80 bg-zinc-900 p-6 border-l border-zinc-700 overflow-y-auto flex flex-col gap-6">
-        <h1 class="text-xl font-bold border-b border-zinc-700 pb-2">Analysis Panel</h1>
-        
-        <section>
-            <h2 class="text-sm font-semibold text-zinc-400 mb-2">操作説明</h2>
-            <ul class="text-xs space-y-1 text-zinc-300">
-                <li>・動画：ドロップして読み込み</li>
-                <li>・選手・ボール：ドラッグで移動</li>
-                <li>・矢印：空白をドラッグで矢印描画</li>
-            </ul>
-        </section>
+    <div class="w-full md:w-96 bg-zinc-900 p-4 md:p-6 border-t md:border-t-0 md:border-l border-zinc-700 md:h-screen flex flex-col">
+        <!-- タブナビゲーション -->
+        <div class="flex gap-1 mb-4 bg-zinc-800 p-1 rounded-lg shrink-0">
+            <button id="tabRecording" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold active">録画</button>
+            <button id="tabVoiceConvert" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">音声変換</button>
+            <button id="tabResult" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">結果</button>
+        </div>
 
-        <section class="flex flex-col gap-3">
-            <h2 class="text-sm font-semibold text-zinc-400">チーム編成</h2>
-            <div class="flex items-center justify-between bg-zinc-800 p-2 rounded">
-                <span class="text-red-500 font-bold">RED</span>
-                <div class="flex items-center gap-2">
-                    <span id="redCount" class="text-white font-mono w-6 text-center">0</span>
-                    <button id="redDecBtn" onclick="changePlayerCount('red', -1)" class="w-8 h-8 bg-zinc-700 rounded disabled:opacity-30">-</button>
-                    <button id="redIncBtn" onclick="changePlayerCount('red', 1)" class="w-8 h-8 bg-zinc-700 rounded disabled:opacity-30">+</button>
+        <!-- 録画タブ -->
+        <div id="contentRecording" class="tab-content flex-grow gap-4 md:gap-6 overflow-y-auto pr-1 active">
+            <section>
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">操作説明</h2>
+                <ul class="text-xs space-y-1 text-zinc-300">
+                    <li>・動画：ドロップして読み込み</li>
+                    <li>・選手・ボール：ドラッグで移動</li>
+                    <li>・矢印：空白をドラッグで矢印描画</li>
+                </ul>
+            </section>
+
+            <section class="flex flex-col gap-3">
+                <h2 class="text-sm font-semibold text-zinc-400">チーム編成</h2>
+                <div class="grid grid-cols-2 md:grid-cols-1 gap-2">
+                    <div class="flex items-center justify-between bg-zinc-800 p-2 rounded">
+                        <span class="text-red-500 font-bold">RED</span>
+                        <div class="flex items-center gap-2">
+                            <span id="redCount" class="text-white font-mono w-6 text-center">0</span>
+                            <button id="redDecBtn" onclick="changePlayerCount('red', -1)" class="w-8 h-8 bg-zinc-700 rounded disabled:opacity-30">-</button>
+                            <button id="redIncBtn" onclick="changePlayerCount('red', 1)" class="w-8 h-8 bg-zinc-700 rounded disabled:opacity-30">+</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between bg-zinc-800 p-2 rounded">
+                        <span class="text-blue-500 font-bold">BLUE</span>
+                        <div class="flex items-center gap-2">
+                            <span id="blueCount" class="text-white font-mono w-6 text-center">0</span>
+                            <button id="blueDecBtn" onclick="changePlayerCount('blue', -1)" class="w-8 h-8 bg-zinc-700 rounded disabled:opacity-30">-</button>
+                            <button id="blueIncBtn" onclick="changePlayerCount('blue', 1)" class="w-8 h-8 bg-zinc-700 rounded disabled:opacity-30">+</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="flex items-center justify-between bg-zinc-800 p-2 rounded">
-                <span class="text-blue-500 font-bold">BLUE</span>
-                <div class="flex items-center gap-2">
-                    <span id="blueCount" class="text-white font-mono w-6 text-center">0</span>
-                    <button id="blueDecBtn" onclick="changePlayerCount('blue', -1)" class="w-8 h-8 bg-zinc-700 rounded disabled:opacity-30">-</button>
-                    <button id="blueIncBtn" onclick="changePlayerCount('blue', 1)" class="w-8 h-8 bg-zinc-700 rounded disabled:opacity-30">+</button>
+            </section>
+
+            <section class="grid grid-cols-2 gap-2">
+                <button id="resetLayoutBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">配置リセット</button>
+                <button id="resetArrowsBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">矢印リセット</button>
+            </section>
+
+            <section class="mt-auto border-t border-zinc-700 pt-4 flex flex-col gap-2 shrink-0">
+                <button id="startRecBtn" disabled class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-bold transition-colors">録画開始</button>
+                <button id="stopRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録画停止</button>
+            </section>
+        </div>
+
+        <!-- 音声変換タブ -->
+        <div id="contentVoiceConvert" class="tab-content flex-grow gap-4 overflow-y-auto pr-1">
+            <section>
+                <h2 class="text-sm font-semibold text-zinc-400 mb-3">変換モード</h2>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-3 bg-zinc-800 p-3 rounded cursor-pointer hover:bg-zinc-700">
+                        <input type="radio" name="convertMode" value="mode1" checked class="accent-blue-500">
+                        <div>
+                            <div class="font-semibold text-sm">Voice Changer</div>
+                            <div class="text-xs text-zinc-400">ElevenLabs Speech-to-Speech（推奨）</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center gap-3 bg-zinc-800 p-3 rounded cursor-pointer hover:bg-zinc-700">
+                        <input type="radio" name="convertMode" value="mode2" class="accent-blue-500">
+                        <div>
+                            <div class="font-semibold text-sm">STT-TTS</div>
+                            <div class="text-xs text-zinc-400">音声認識 + 音声合成</div>
+                        </div>
+                    </label>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <section class="grid grid-cols-2 gap-2">
-            <button id="resetLayoutBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">配置リセット</button>
-            <button id="resetArrowsBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">矢印リセット</button>
-        </section>
+            <section>
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">ボイス選択</h2>
+                <select id="voiceSelect" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm">
+                    <option value="">読み込み中...</option>
+                </select>
+                <button id="previewVoiceBtn" class="mt-2 text-xs text-blue-400 hover:text-blue-300">ボイスをプレビュー</button>
+            </section>
 
-        <section class="mt-auto border-t border-zinc-700 pt-4 flex flex-col gap-2">
-            <button id="startRecBtn" disabled class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-bold transition-colors">録画開始</button>
-            <button id="stopRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録画停止・保存</button>
-        </section>
+            <section id="progressSection" class="hidden">
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">変換進捗</h2>
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2">
+                        <div class="spinner"></div>
+                        <span id="progressStatus" class="text-sm">処理中...</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div id="progressDetail" class="text-xs text-zinc-400"></div>
+                </div>
+            </section>
+
+            <section class="mt-auto border-t border-zinc-700 pt-4 shrink-0">
+                <button id="startConvertBtn" disabled class="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 rounded font-bold transition-colors">音声変換を開始</button>
+                <button id="skipConvertBtn" class="w-full py-2 mt-2 text-zinc-400 hover:text-white text-sm">変換をスキップしてダウンロード</button>
+            </section>
+        </div>
+
+        <!-- 結果タブ -->
+        <div id="contentResult" class="tab-content flex-grow gap-4 overflow-y-auto pr-1">
+            <section>
+                <h2 class="text-sm font-semibold text-zinc-400 mb-3">変換結果</h2>
+                <div id="resultStatus" class="bg-zinc-800 p-4 rounded">
+                    <div class="text-center text-zinc-400">変換完了後に結果が表示されます</div>
+                </div>
+            </section>
+
+            <section id="resultPreview" class="hidden">
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">プレビュー</h2>
+                <video id="resultVideo" controls class="w-full rounded bg-black"></video>
+            </section>
+
+            <section id="resultActions" class="hidden border-t border-zinc-700 pt-4 space-y-2">
+                <button id="downloadResultBtn" class="w-full py-3 bg-green-600 hover:bg-green-700 rounded font-bold flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                    動画をダウンロード
+                </button>
+                <button id="regenerateBtn" class="w-full py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">別モードで再生成</button>
+                <button id="newRecordingBtn" class="w-full py-2 text-zinc-400 hover:text-white text-sm">新しい録画を開始</button>
+            </section>
+
+            <section id="errorSection" class="hidden">
+                <div class="bg-red-900/50 border border-red-700 p-4 rounded">
+                    <h3 class="font-semibold text-red-400 mb-2">エラーが発生しました</h3>
+                    <p id="errorMessage" class="text-sm text-zinc-300"></p>
+                    <p class="text-sm text-zinc-400 mt-2">問題が解決しない場合は、Engチームに連絡してください。</p>
+                </div>
+            </section>
+        </div>
     </div>
 
     <script>
+        // ========== タブ管理 ==========
+        const tabs = {
+            recording: { btn: document.getElementById('tabRecording'), content: document.getElementById('contentRecording') },
+            voiceConvert: { btn: document.getElementById('tabVoiceConvert'), content: document.getElementById('contentVoiceConvert') },
+            result: { btn: document.getElementById('tabResult'), content: document.getElementById('contentResult') }
+        };
+
+        function switchTab(tabName) {
+            Object.entries(tabs).forEach(([name, { btn, content }]) => {
+                btn.classList.toggle('active', name === tabName);
+                content.classList.toggle('active', name === tabName);
+            });
+            
+            // タブ切り替え時にボイス一覧が空ならロードを試みる
+            if (tabName === 'voiceConvert' && availableVoices.length === 0) {
+                loadVoices();
+            }
+        }
+
+        Object.entries(tabs).forEach(([name, { btn }]) => {
+            btn.onclick = () => switchTab(name);
+        });
+
+        // ========== キャンバス・ピッチ ==========
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
         const video = document.createElement('video');
-        
-        // 状態管理
+
         let objects = [];
         let arrows = [];
         let isDragging = false;
@@ -98,11 +265,11 @@
         let tempArrow = null;
         let isVideoLoaded = false;
 
-        // 録画関連
         let mediaRecorder;
         let recordedChunks = [];
+        let recordedVideoBlob = null;
+        let recordedAudioBlob = null;
 
-        // 初期設定
         const PITCH_TOP = 1920 / 2;
         const PITCH_HEIGHT = 1920 / 2;
         const CANVAS_WIDTH = 1080;
@@ -110,15 +277,16 @@
         function updatePlayerUI() {
             const redPlayers = objects.filter(o => o.team === 'red').length;
             const bluePlayers = objects.filter(o => o.team === 'blue').length;
-            
+
             document.getElementById('redCount').innerText = redPlayers;
             document.getElementById('blueCount').innerText = bluePlayers;
-            
+
             document.getElementById('redDecBtn').disabled = redPlayers <= 0;
             document.getElementById('redIncBtn').disabled = redPlayers >= 11;
             document.getElementById('blueDecBtn').disabled = bluePlayers <= 0;
             document.getElementById('blueIncBtn').disabled = bluePlayers >= 11;
         }
+
         function resetLayout() {
             objects = [
                 { id: 'ball', x: 540, y: PITCH_TOP + 480, r: 25, color: '#fff', type: 'ball' },
@@ -130,23 +298,15 @@
             updatePlayerUI();
         }
 
-        function resetArrows() {
-            arrows = [];
-        }
+        function resetArrows() { arrows = []; }
+        function initObjects() { resetLayout(); resetArrows(); }
 
-        function initObjects() {
-            resetLayout();
-            resetArrows();
-        }
-
-        // チーム人数変更
         window.changePlayerCount = (team, delta) => {
             const count = objects.filter(o => o.team === team).length;
             if (delta > 0 && count < 11) {
-                // コートの縦幅を11分割して均等に配置（重なり防止）
                 const yPos = PITCH_TOP + (count + 0.5) * (PITCH_HEIGHT / 11);
                 objects.push({
-                    x: team === 'red' ? 200 : 880, 
+                    x: team === 'red' ? 200 : 880,
                     y: yPos,
                     r: 35, color: team === 'red' ? '#ef4444' : '#3b82f6',
                     type: 'player', team: team
@@ -159,61 +319,41 @@
         };
 
         // --- 描画ロジック ---
-
         function drawField() {
             ctx.save();
             ctx.translate(0, PITCH_TOP);
-            
-            // 芝生
             ctx.fillStyle = '#1a4314';
             ctx.fillRect(0, 0, CANVAS_WIDTH, PITCH_HEIGHT);
-            
-            // ライン描画
             ctx.strokeStyle = 'rgba(255,255,255,0.7)';
             ctx.lineWidth = 5;
-            
             const margin = 50;
             const w = CANVAS_WIDTH - margin * 2;
             const h = PITCH_HEIGHT - margin * 2;
-
-            // 外枠
             ctx.strokeRect(margin, margin, w, h);
-            
-            // センターライン (垂直)
             ctx.beginPath();
             ctx.moveTo(CANVAS_WIDTH / 2, margin);
             ctx.lineTo(CANVAS_WIDTH / 2, PITCH_HEIGHT - margin);
             ctx.stroke();
-            
-            // センターサークル
             ctx.beginPath();
             ctx.arc(CANVAS_WIDTH / 2, PITCH_HEIGHT / 2, 120, 0, Math.PI * 2);
             ctx.stroke();
-            
-            // ペナルティエリア（簡易 - 左右）
-            const paW = 150;
-            const paH = 400;
-            const paY = (PITCH_HEIGHT - paH) / 2;
-            ctx.strokeRect(margin, paY, paW, paH); // 左
-            ctx.strokeRect(CANVAS_WIDTH - margin - paW, paY, paW, paH); // 右
-
+            const paW = 150, paH = 400, paY = (PITCH_HEIGHT - paH) / 2;
+            ctx.strokeRect(margin, paY, paW, paH);
+            ctx.strokeRect(CANVAS_WIDTH - margin - paW, paY, paW, paH);
             ctx.restore();
         }
 
         function drawArrow(start, end, color = "yellow") {
-            const headlen = 30; 
-            const dx = end.x - start.x;
-            const dy = end.y - start.y;
+            const headlen = 30;
+            const dx = end.x - start.x, dy = end.y - start.y;
             const angle = Math.atan2(dy, dx);
             ctx.strokeStyle = color;
             ctx.lineWidth = 8;
             ctx.lineCap = "round";
-
             ctx.beginPath();
             ctx.moveTo(start.x, start.y);
             ctx.lineTo(end.x, end.y);
             ctx.stroke();
-
             ctx.beginPath();
             ctx.moveTo(end.x, end.y);
             ctx.lineTo(end.x - headlen * Math.cos(angle - Math.PI / 6), end.y - headlen * Math.sin(angle - Math.PI / 6));
@@ -237,19 +377,30 @@
 
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // 1. 上半分：動画
             ctx.fillStyle = "#000";
             ctx.fillRect(0, 0, CANVAS_WIDTH, PITCH_TOP);
-            
+
             if (isVideoLoaded) {
                 if (video.readyState >= 2) {
-                    const aspect = video.videoWidth / video.videoHeight;
-                    const drawW = CANVAS_WIDTH;
-                    const drawH = CANVAS_WIDTH / aspect;
-                    ctx.drawImage(video, 0, (PITCH_TOP - drawH) / 2, drawW, drawH);
+                    const videoAspect = video.videoWidth / video.videoHeight;
+                    const containerAspect = CANVAS_WIDTH / PITCH_TOP;
+                    let drawW, drawH;
+
+                    if (videoAspect > containerAspect) {
+                        // 横長または同じアスペクト比：横幅を100%に合わせる
+                        drawW = CANVAS_WIDTH;
+                        drawH = CANVAS_WIDTH / videoAspect;
+                    } else {
+                        // 縦長：高さを100%に合わせる
+                        drawH = PITCH_TOP;
+                        drawW = PITCH_TOP * videoAspect;
+                    }
+
+                    // 描画エリア（上半分）の中心に配置
+                    const x = (CANVAS_WIDTH - drawW) / 2;
+                    const y = (PITCH_TOP - drawH) / 2;
+                    ctx.drawImage(video, x, y, drawW, drawH);
                 }
-                // ロード済みの場合は、シーク中（readyState < 2）でもプレイスホルダーは出さない
             } else {
                 ctx.fillStyle = "#333";
                 ctx.fillRect(50, 50, CANVAS_WIDTH - 100, PITCH_TOP - 100);
@@ -259,21 +410,15 @@
                 ctx.fillText("ここに動画をドロップして読み込み", CANVAS_WIDTH / 2, PITCH_TOP / 2);
             }
 
-            // 2. 下半分：ピッチ
             drawField();
-
-            // 3. 矢印
             arrows.forEach(a => drawArrow(a.start, a.end));
             if (tempArrow) drawArrow(tempArrow.start, tempArrow.end, "rgba(255,255,0,0.5)");
 
-            // 4. オブジェクト
             objects.forEach(obj => {
                 ctx.save();
                 if (obj.type === 'ball') {
                     ctx.beginPath();
                     ctx.arc(obj.x, obj.y, obj.r, 0, Math.PI * 2);
-                    
-                    // シャドーとベースの白
                     ctx.shadowBlur = 15;
                     ctx.shadowOffsetX = 5;
                     ctx.shadowOffsetY = 5;
@@ -283,11 +428,8 @@
                     ctx.shadowBlur = 0;
                     ctx.shadowOffsetX = 0;
                     ctx.shadowOffsetY = 0;
-
-                    // 五角形パターンのためのクリッピング
                     ctx.save();
                     ctx.clip();
-                    
                     ctx.fillStyle = '#000';
                     const pentagonSize = obj.r * 0.4;
                     drawPentagon(ctx, obj.x, obj.y, pentagonSize);
@@ -297,7 +439,6 @@
                         drawPentagon(ctx, obj.x + Math.cos(angle) * dist, obj.y + Math.sin(angle) * dist, pentagonSize, angle + Math.PI);
                     }
                     ctx.restore();
-                    
                     ctx.beginPath();
                     ctx.arc(obj.x, obj.y, obj.r, 0, Math.PI * 2);
                     ctx.strokeStyle = '#333';
@@ -319,81 +460,69 @@
                 }
                 ctx.restore();
             });
-
             requestAnimationFrame(render);
         }
 
         // --- インタラクション ---
-
-        function getMousePos(e) {
+        function getPointerPos(e) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
-            return {
-                x: (e.clientX - rect.left) * scaleX,
-                y: (e.clientY - rect.top) * scaleY
-            };
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
         }
 
-        canvas.onmousedown = (e) => {
-            const pos = getMousePos(e);
-            dragTarget = [...objects].reverse().find(o => {
-                const dist = Math.hypot(o.x - pos.x, o.y - pos.y);
-                return dist < o.r;
-            });
-
+        function handlePointerDown(e) {
+            const pos = getPointerPos(e);
+            dragTarget = [...objects].reverse().find(o => Math.hypot(o.x - pos.x, o.y - pos.y) < o.r);
             if (dragTarget) {
                 isDragging = true;
                 canvas.style.cursor = 'grabbing';
             } else {
                 arrowStart = pos;
             }
-        };
+        }
 
-        window.onmousemove = (e) => {
-            const pos = getMousePos(e);
-            
+        function handlePointerMove(e) {
+            if (e.touches && e.touches.length === 0) return;
+            const pos = getPointerPos(e);
             if (isDragging) {
                 canvas.style.cursor = 'grabbing';
             } else {
-                const hoverTarget = objects.find(o => {
-                    const dist = Math.hypot(o.x - pos.x, o.y - pos.y);
-                    return dist < o.r;
-                });
+                const hoverTarget = objects.find(o => Math.hypot(o.x - pos.x, o.y - pos.y) < o.r);
                 canvas.style.cursor = hoverTarget ? 'grab' : 'crosshair';
             }
-
             if (isDragging && dragTarget) {
                 dragTarget.x = pos.x;
                 dragTarget.y = pos.y;
             } else if (arrowStart) {
                 tempArrow = { start: arrowStart, end: pos };
             }
-        };
+        }
 
-        window.onmouseup = (e) => {
+        function handlePointerUp(e) {
             if (tempArrow) arrows.push(tempArrow);
             isDragging = false;
             dragTarget = null;
             arrowStart = null;
             tempArrow = null;
-
-            if (e) {
-                const pos = getMousePos(e);
-                const hoverTarget = objects.find(o => {
-                    const dist = Math.hypot(o.x - pos.x, o.y - pos.y);
-                    return dist < o.r;
-                });
+            if (e && e.clientX !== undefined) {
+                const pos = getPointerPos(e);
+                const hoverTarget = objects.find(o => Math.hypot(o.x - pos.x, o.y - pos.y) < o.r);
                 canvas.style.cursor = hoverTarget ? 'grab' : 'crosshair';
             }
-        };
+        }
+
+        canvas.onmousedown = handlePointerDown;
+        window.onmousemove = handlePointerMove;
+        window.onmouseup = handlePointerUp;
+        canvas.ontouchstart = (e) => { e.preventDefault(); handlePointerDown(e); };
+        window.ontouchmove = (e) => { if (isDragging || arrowStart) e.preventDefault(); handlePointerMove(e); };
+        window.ontouchend = handlePointerUp;
 
         // --- ビデオ制御 ---
-
-        canvas.ondragover = (e) => e.preventDefault();
-        canvas.ondrop = (e) => {
-            e.preventDefault();
-            const file = e.dataTransfer.files[0];
+        function loadVideoFile(file) {
             if (file && file.type.startsWith('video/')) {
                 video.src = URL.createObjectURL(file);
                 video.onloadedmetadata = () => {
@@ -402,7 +531,17 @@
                     video.play();
                 };
             }
+        }
+
+        canvas.ondragover = (e) => e.preventDefault();
+        canvas.ondrop = (e) => { e.preventDefault(); loadVideoFile(e.dataTransfer.files[0]); };
+
+        const videoFileInput = document.getElementById('videoFileInput');
+        canvas.onclick = (e) => {
+            const pos = getPointerPos(e);
+            if (!isVideoLoaded && pos.y < PITCH_TOP) videoFileInput.click();
         };
+        videoFileInput.onchange = (e) => loadVideoFile(e.target.files[0]);
 
         const playPauseBtn = document.getElementById('playPauseBtn');
         const seekBar = document.getElementById('seekBar');
@@ -410,28 +549,17 @@
 
         playPauseBtn.onclick = () => {
             if (!video.src) return;
-            if (video.paused) {
-                video.play();
-            } else {
-                video.pause();
-            }
+            video.paused ? video.play() : video.pause();
         };
 
         video.onplay = () => { playPauseBtn.innerText = '一時停止'; };
         video.onpause = () => { playPauseBtn.innerText = '再生'; };
-
         video.ontimeupdate = () => {
             if (!video.duration) return;
             seekBar.value = (video.currentTime / video.duration) * 100;
-            const cur = formatTime(video.currentTime);
-            const dur = formatTime(video.duration);
-            timeDisplay.innerText = `${cur} / ${dur}`;
+            timeDisplay.innerText = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
         };
-
-        seekBar.oninput = () => {
-            if (!video.duration) return;
-            video.currentTime = (seekBar.value / 100) * video.duration;
-        };
+        seekBar.oninput = () => { if (video.duration) video.currentTime = (seekBar.value / 100) * video.duration; };
 
         function formatTime(sec) {
             const m = Math.floor(sec / 60).toString().padStart(2, '0');
@@ -442,31 +570,57 @@
         document.getElementById('resetLayoutBtn').onclick = resetLayout;
         document.getElementById('resetArrowsBtn').onclick = resetArrows;
 
-        // --- 録画機能 ---
-
+        // ========== 録画機能 ==========
         const startRecBtn = document.getElementById('startRecBtn');
         const stopRecBtn = document.getElementById('stopRecBtn');
 
+        function getSupportedMimeType() {
+            const types = [
+                'video/mp4;codecs=avc1',
+                'video/mp4',
+                'video/webm;codecs=vp9',
+                'video/webm;codecs=vp8',
+                'video/webm'
+            ];
+            for (const type of types) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    return type;
+                }
+            }
+            return '';
+        }
+
         startRecBtn.onclick = async () => {
             recordedChunks = [];
-            const stream = canvas.captureStream(60); // 60fps
-            
+            recordedAudioBlob = null;
+            const stream = canvas.captureStream(60);
+
             try {
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioStream.getAudioTracks().forEach(track => stream.addTrack(track));
+
+                // 音声を別途録音（変換用）
+                const audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+                const audioChunks = [];
+                audioRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+                audioRecorder.onstop = () => {
+                    recordedAudioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    document.getElementById('startConvertBtn').disabled = false;
+                };
+                audioRecorder.start();
+                window._audioRecorder = audioRecorder;
             } catch (e) {
                 console.warn("マイクが許可されませんでした。映像のみ録画します。");
             }
 
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+            const mimeType = getSupportedMimeType();
+            mediaRecorder = new MediaRecorder(stream, { mimeType });
             mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `analysis_${Date.now()}.mp4`;
-                a.click();
+                recordedVideoBlob = new Blob(recordedChunks, { type: mimeType });
+                // 音声変換タブに遷移
+                switchTab('voiceConvert');
+                loadVoices();
             };
 
             mediaRecorder.start();
@@ -476,14 +630,458 @@
 
         stopRecBtn.onclick = () => {
             mediaRecorder.stop();
+            if (window._audioRecorder) {
+                window._audioRecorder.stop();
+            }
             startRecBtn.classList.remove('hidden');
             stopRecBtn.classList.add('hidden');
         };
 
-        // 初期化実行
+        // ========== 音声変換 ==========
+        let availableVoices = [];
+        let convertedVideoBlob = null;
+
+        async function loadVoices() {
+            const voiceSelect = document.getElementById('voiceSelect');
+            try {
+                const res = await fetch('/api/voice-convert/voices');
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+                }
+                const data = await res.json();
+                availableVoices = data.voices || [];
+                
+                if (availableVoices.length === 0) {
+                    voiceSelect.innerHTML = '<option value="">利用可能なボイスがありません</option>';
+                    return;
+                }
+
+                voiceSelect.innerHTML = availableVoices.map(v =>
+                    `<option value="${v.voice_id}">${v.name}</option>`
+                ).join('');
+            } catch (e) {
+                voiceSelect.innerHTML = `<option value="">エラー: ${e.message}</option>`;
+                console.error('Failed to load voices:', e);
+            }
+        }
+
+        document.getElementById('previewVoiceBtn').onclick = async () => {
+            const voiceId = document.getElementById('voiceSelect').value;
+            const voice = availableVoices.find(v => v.voice_id === voiceId);
+            if (voice && voice.preview_url) {
+                const audio = new Audio(voice.preview_url);
+                audio.play();
+            }
+        };
+
+        // AudioProcessingManager
+        class AudioProcessingManager {
+            constructor() {
+                this.currentMode = null;
+                this.progress = 0;
+            }
+
+            updateProgress(percent, status, detail = '') {
+                this.progress = percent;
+                document.getElementById('progressFill').style.width = `${percent}%`;
+                document.getElementById('progressStatus').textContent = status;
+                document.getElementById('progressDetail').textContent = detail;
+            }
+
+            async executeWithFallback(audioBlob, voiceId, preferredMode) {
+                const modes = preferredMode === 'mode1'
+                    ? ['mode1', 'mode2_elevenlabs', 'mode2_chirp']
+                    : ['mode2_elevenlabs', 'mode2_chirp', 'mode1'];
+
+                for (const mode of modes) {
+                    try {
+                        this.currentMode = mode;
+                        this.updateProgress(10, `${this.getModeLabel(mode)}で変換中...`);
+                        const result = await this.executeMode(mode, audioBlob, voiceId);
+                        return { success: true, audio: result, mode };
+                    } catch (e) {
+                        console.warn(`${mode} failed:`, e);
+                        this.updateProgress(0, `${this.getModeLabel(mode)}が失敗、次のモードを試行中...`);
+                    }
+                }
+
+                return { success: false, error: 'すべての変換モードが失敗しました。Engチームに連絡してください。' };
+            }
+
+            getModeLabel(mode) {
+                const labels = {
+                    'mode1': 'Voice Changer',
+                    'mode2_elevenlabs': 'ElevenLabs TTS',
+                    'mode2_chirp': 'Google Chirp TTS'
+                };
+                return labels[mode] || mode;
+            }
+
+            async executeMode(mode, audioBlob, voiceId) {
+                if (mode === 'mode1') {
+                    return await this.executeMode1(audioBlob, voiceId);
+                } else {
+                    return await this.executeMode2(audioBlob, voiceId, mode === 'mode2_chirp');
+                }
+            }
+
+            async executeMode1(audioBlob, voiceId) {
+                this.updateProgress(20, 'Voice Changerで変換中...');
+                const formData = new FormData();
+                formData.append('audio', audioBlob);
+                formData.append('voice_id', voiceId);
+
+                const res = await fetch('/api/voice-convert/mode1', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) throw new Error(`Mode1 failed: ${res.status}`);
+                this.updateProgress(90, '変換完了');
+                return await res.arrayBuffer();
+            }
+
+            async executeMode2(audioBlob, voiceId, useChirp = false) {
+                // Step 1: STT
+                this.updateProgress(20, '音声認識中...');
+                const sttFormData = new FormData();
+                sttFormData.append('audio', audioBlob);
+                sttFormData.append('language', 'ja-JP');
+
+                const sttRes = await fetch('/api/voice-convert/mode2/stt', {
+                    method: 'POST',
+                    body: sttFormData
+                });
+
+                if (!sttRes.ok) throw new Error(`STT failed: ${sttRes.status}`);
+                const sttData = await sttRes.json();
+                this.updateProgress(50, '音声認識完了、音声合成中...');
+
+                // Step 2: TTS（セグメント分割して生成）
+                const segments = this.segmentByPauses(sttData.words);
+                const audioSegments = [];
+
+                for (let i = 0; i < segments.length; i++) {
+                    const segment = segments[i];
+                    const progress = 50 + (40 * (i + 1) / segments.length);
+                    this.updateProgress(progress, `音声合成中... (${i + 1}/${segments.length})`);
+
+                    const endpoint = useChirp ? '/api/voice-convert/mode2/tts-chirp' : '/api/voice-convert/mode2/tts';
+                    const body = useChirp
+                        ? { text: segment.text, language: 'ja-JP' }
+                        : { text: segment.text, voice_id: voiceId, target_duration_ms: segment.duration * 1000 };
+
+                    const ttsRes = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+
+                    if (!ttsRes.ok) throw new Error(`TTS failed: ${ttsRes.status}`);
+                    const ttsData = await ttsRes.json();
+
+                    audioSegments.push({
+                        audioBase64: ttsData.audio_base64,
+                        startTime: segment.startTime,
+                        duration: segment.duration,
+                        actualDuration: ttsData.actual_duration_ms / 1000
+                    });
+                }
+
+                this.updateProgress(95, '音声を合成中...');
+                return await this.combineAudioSegments(audioSegments);
+            }
+
+            segmentByPauses(words, pauseThreshold = 0.5) {
+                if (!words || words.length === 0) return [];
+
+                const segments = [];
+                let currentSegment = { text: '', startTime: 0, endTime: 0 };
+
+                words.forEach((word, i) => {
+                    if (i === 0) {
+                        currentSegment.startTime = word.startTime;
+                    }
+
+                    const prevEnd = i > 0 ? words[i - 1].endTime : word.startTime;
+                    const gap = word.startTime - prevEnd;
+
+                    if (gap >= pauseThreshold && currentSegment.text) {
+                        currentSegment.endTime = prevEnd;
+                        currentSegment.duration = currentSegment.endTime - currentSegment.startTime;
+                        segments.push({ ...currentSegment });
+                        currentSegment = { text: '', startTime: word.startTime, endTime: 0 };
+                    }
+
+                    currentSegment.text += word.word;
+                    currentSegment.endTime = word.endTime;
+                });
+
+                if (currentSegment.text) {
+                    currentSegment.duration = currentSegment.endTime - currentSegment.startTime;
+                    segments.push(currentSegment);
+                }
+
+                return segments;
+            }
+
+            async combineAudioSegments(segments) {
+                // 全体の長さを計算
+                const lastSegment = segments[segments.length - 1];
+                const totalDuration = lastSegment.startTime + Math.max(lastSegment.duration, lastSegment.actualDuration);
+
+                // AudioContextで合成
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const sampleRate = audioContext.sampleRate;
+                const totalSamples = Math.ceil(totalDuration * sampleRate);
+                const outputBuffer = audioContext.createBuffer(1, totalSamples, sampleRate);
+                const outputData = outputBuffer.getChannelData(0);
+
+                for (const segment of segments) {
+                    if (!segment.audioBase64) continue;
+                    
+                    // Base64データにプレフィックスが含まれている場合は除去
+                    const base64Data = segment.audioBase64.includes(',') 
+                        ? segment.audioBase64.split(',')[1] 
+                        : segment.audioBase64;
+
+                    try {
+                        const binaryString = atob(base64Data);
+                        const audioData = Uint8Array.from(binaryString, c => c.charCodeAt(0));
+                        const decoded = await audioContext.decodeAudioData(audioData.buffer.slice(0));
+                        const segmentData = decoded.getChannelData(0);
+
+                        // 速度調整（リサンプリング）
+                        const speedRatio = segment.actualDuration / segment.duration;
+                        const startSample = Math.floor(segment.startTime * sampleRate);
+
+                        for (let i = 0; i < segmentData.length && startSample + i < totalSamples; i++) {
+                            const targetIdx = startSample + Math.floor(i / speedRatio);
+                            if (targetIdx < totalSamples) {
+                                outputData[targetIdx] += segmentData[i];
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Failed to decode segment:', e);
+                    }
+                }
+
+                // WAVに変換
+                return this.bufferToWav(outputBuffer);
+            }
+
+            bufferToWav(audioBuffer) {
+                const numChannels = audioBuffer.numberOfChannels;
+                const sampleRate = audioBuffer.sampleRate;
+                const format = 1; // PCM
+                const bitDepth = 16;
+                const blockAlign = numChannels * bitDepth / 8;
+                const byteRate = sampleRate * blockAlign;
+                const dataLength = audioBuffer.length * blockAlign;
+                const buffer = new ArrayBuffer(44 + dataLength);
+                const view = new DataView(buffer);
+
+                const writeString = (offset, string) => {
+                    for (let i = 0; i < string.length; i++) {
+                        view.setUint8(offset + i, string.charCodeAt(i));
+                    }
+                };
+
+                writeString(0, 'RIFF');
+                view.setUint32(4, 36 + dataLength, true);
+                writeString(8, 'WAVE');
+                writeString(12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, format, true);
+                view.setUint16(22, numChannels, true);
+                view.setUint32(24, sampleRate, true);
+                view.setUint32(28, byteRate, true);
+                view.setUint16(32, blockAlign, true);
+                view.setUint16(34, bitDepth, true);
+                writeString(36, 'data');
+                view.setUint32(40, dataLength, true);
+
+                const channelData = audioBuffer.getChannelData(0);
+                let offset = 44;
+                for (let i = 0; i < channelData.length; i++) {
+                    const sample = Math.max(-1, Math.min(1, channelData[i]));
+                    view.setInt16(offset, sample * 0x7FFF, true);
+                    offset += 2;
+                }
+
+                return buffer;
+            }
+        }
+
+        const audioManager = new AudioProcessingManager();
+
+        document.getElementById('startConvertBtn').onclick = async () => {
+            if (!recordedAudioBlob) {
+                showError('音声データがありません。録画時にマイクを許可してください。');
+                return;
+            }
+
+            const voiceId = document.getElementById('voiceSelect').value;
+            if (!voiceId) {
+                showError('ボイスを選択してください。');
+                return;
+            }
+
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+
+            document.getElementById('progressSection').classList.remove('hidden');
+            document.getElementById('startConvertBtn').disabled = true;
+
+            try {
+                const result = await audioManager.executeWithFallback(recordedAudioBlob, voiceId, mode);
+
+                if (result.success) {
+                    audioManager.updateProgress(100, '変換完了!');
+                    await createConvertedVideo(result.audio);
+                    switchTab('result');
+                    showResult(result.mode);
+                } else {
+                    showError(result.error);
+                    switchTab('result');
+                }
+            } catch (e) {
+                showError(`変換中にエラーが発生しました: ${e.message}`);
+                switchTab('result');
+            }
+
+            document.getElementById('progressSection').classList.add('hidden');
+            document.getElementById('startConvertBtn').disabled = false;
+        };
+
+        document.getElementById('skipConvertBtn').onclick = () => {
+            convertedVideoBlob = recordedVideoBlob;
+            switchTab('result');
+            showResult(null);
+        };
+
+        async function createConvertedVideo(audioBuffer) {
+            audioManager.updateProgress(98, '動画を合成中...');
+
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const decodedAudio = await audioContext.decodeAudioData(audioBuffer.slice(0));
+            const audioSource = audioContext.createBufferSource();
+            audioSource.buffer = decodedAudio;
+
+            const destination = audioContext.createMediaStreamDestination();
+            audioSource.connect(destination);
+
+            // 元の動画を再生してストリームを取得
+            const videoElement = document.createElement('video');
+            videoElement.src = URL.createObjectURL(recordedVideoBlob);
+            videoElement.muted = true;
+            videoElement.playsInline = true;
+
+            return new Promise((resolve, reject) => {
+                videoElement.onloadedmetadata = async () => {
+                    try {
+                        const videoStream = videoElement.captureStream ? videoElement.captureStream() : videoElement.mozCaptureStream();
+                        const combinedStream = new MediaStream([
+                            ...videoStream.getVideoTracks(),
+                            ...destination.stream.getAudioTracks()
+                        ]);
+
+                        const mimeType = getSupportedMimeType();
+                        const recorder = new MediaRecorder(combinedStream, {
+                            mimeType,
+                            videoBitsPerSecond: 5000000 // 5Mbps
+                        });
+
+                        const chunks = [];
+                        recorder.ondataavailable = e => {
+                            if (e.data.size > 0) chunks.push(e.data);
+                        };
+
+                        recorder.onstop = () => {
+                            convertedVideoBlob = new Blob(chunks, { type: mimeType });
+                            resolve();
+                        };
+
+                        recorder.start();
+                        audioSource.start(0);
+                        await videoElement.play();
+
+                        videoElement.onended = () => {
+                            recorder.stop();
+                            audioSource.stop();
+                        };
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+                videoElement.onerror = (e) => reject(new Error('Video load failed'));
+            });
+        }
+
+        function showResult(mode) {
+            document.getElementById('errorSection').classList.add('hidden');
+            document.getElementById('resultActions').classList.remove('hidden');
+
+            if (mode) {
+                document.getElementById('resultStatus').innerHTML = `
+                    <div class="text-green-400 font-semibold mb-2">変換成功</div>
+                    <div class="text-sm text-zinc-400">使用モード: ${audioManager.getModeLabel(mode)}</div>
+                `;
+            } else {
+                document.getElementById('resultStatus').innerHTML = `
+                    <div class="text-zinc-400">元の音声で保存されました</div>
+                `;
+            }
+
+            if (convertedVideoBlob) {
+                const url = URL.createObjectURL(convertedVideoBlob);
+                const resultVideo = document.getElementById('resultVideo');
+                resultVideo.src = url;
+                document.getElementById('resultPreview').classList.remove('hidden');
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('resultActions').classList.add('hidden');
+            document.getElementById('resultPreview').classList.add('hidden');
+            document.getElementById('errorSection').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('resultStatus').innerHTML = `
+                <div class="text-red-400">変換に失敗しました</div>
+            `;
+        }
+
+        document.getElementById('downloadResultBtn').onclick = () => {
+            if (convertedVideoBlob) {
+                const url = URL.createObjectURL(convertedVideoBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                const extension = convertedVideoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+                a.download = `analysis_${Date.now()}.${extension}`;
+                a.click();
+            }
+        };
+
+        document.getElementById('regenerateBtn').onclick = () => {
+            switchTab('voiceConvert');
+            // 別モードを自動選択
+            const currentMode = document.querySelector('input[name="convertMode"]:checked').value;
+            const newMode = currentMode === 'mode1' ? 'mode2' : 'mode1';
+            document.querySelector(`input[name="convertMode"][value="${newMode}"]`).checked = true;
+        };
+
+        document.getElementById('newRecordingBtn').onclick = () => {
+            recordedVideoBlob = null;
+            recordedAudioBlob = null;
+            convertedVideoBlob = null;
+            document.getElementById('startConvertBtn').disabled = true;
+            switchTab('recording');
+        };
+
+        // 初期化
         initObjects();
         render();
-
+        loadVoices();
     </script>
 </body>
 </html>
