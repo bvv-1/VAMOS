@@ -115,6 +115,7 @@
                                 <button id="nextBoardBtn" disabled class="py-2 px-4 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">ボード送り</button>
                             </div>
                         </div>
+                        <div id="boardJumpButtons" class="flex flex-wrap gap-2 mb-2"></div>
                         <div id="boardPlaybackHint" class="text-xs text-zinc-400">ボード作成タブで保存した順に切り替えます。</div>
                     </div>
                     <button id="resetToInitialScreenBtn" class="w-full py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm transition-colors">初期画面に戻る</button>
@@ -419,6 +420,24 @@
             status.classList.toggle('text-zinc-400', !isError);
         }
 
+        function renderBoardJumpButtons() {
+            const container = document.getElementById('boardJumpButtons');
+            container.innerHTML = '';
+
+            savedBoards.forEach((board, index) => {
+                const button = document.createElement('button');
+                const isActive = index === activeBoardIndex;
+                button.type = 'button';
+                button.textContent = String(index + 1);
+                button.title = `${index + 1}: ${board.name}`;
+                button.className = isActive
+                    ? 'min-w-10 h-10 px-3 rounded bg-blue-600 text-white font-semibold text-sm transition-colors'
+                    : 'min-w-10 h-10 px-3 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-semibold text-sm transition-colors';
+                button.onclick = () => loadBoard(index);
+                container.appendChild(button);
+            });
+        }
+
         function updateBoardPlaybackUI() {
             const prevBoardBtn = document.getElementById('prevBoardBtn');
             const nextBoardBtn = document.getElementById('nextBoardBtn');
@@ -428,6 +447,7 @@
             if (savedBoards.length === 0) {
                 prevBoardBtn.disabled = true;
                 nextBoardBtn.disabled = true;
+                renderBoardJumpButtons();
                 status.textContent = '0件';
                 hint.textContent = 'ボード作成タブで保存すると、ここから順番に切り替えられます。';
                 return;
@@ -437,6 +457,7 @@
             const hasNextBoard = activeBoardIndex + 1 < savedBoards.length;
             prevBoardBtn.disabled = !hasPrevBoard;
             nextBoardBtn.disabled = !hasNextBoard;
+            renderBoardJumpButtons();
 
             if (activeBoardIndex >= 0 && activeBoardIndex < savedBoards.length) {
                 status.textContent = `現在: ${savedBoards[activeBoardIndex].name}`;
