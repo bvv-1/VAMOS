@@ -110,6 +110,12 @@
                     <div id="transcriptSection" class="hidden">
                         <label for="transcriptInput" class="text-xs font-semibold text-zinc-400 mb-1 block">文字起こし結果（編集可能）</label>
                         <textarea id="transcriptInput" rows="4" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm resize-y" placeholder="文字起こし結果がここに表示されます"></textarea>
+                        <div class="mt-2">
+                            <label for="recordingVoiceSelect" class="text-xs font-semibold text-zinc-400 mb-1 block">ボイス選択</label>
+                            <select id="recordingVoiceSelect" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm">
+                                <option value="">読み込み中...</option>
+                            </select>
+                        </div>
                         <div class="flex gap-2 mt-2">
                             <button id="ttsConvertBtn" class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">音声変換</button>
                             <button id="ttsPlayBtn" disabled class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">再生</button>
@@ -1353,18 +1359,24 @@
                 // ボイスID 決定: 音声変換タブで ElevenLabs ボイスが選択されていればそれを使用、
                 // なければボイス一覧の先頭を使う
                 let voiceId = null;
+                const recordingVoiceSelectEl = document.getElementById('recordingVoiceSelect');
                 const voiceSelectEl = document.getElementById('voiceSelect');
                 const modeRadio = document.querySelector('input[name="convertMode"]:checked');
                 const mode = modeRadio ? modeRadio.value : null;
-                if (voiceSelectEl && voiceSelectEl.value && mode !== 'mode2_chirp') {
+                if (recordingVoiceSelectEl && recordingVoiceSelectEl.value) {
+                    voiceId = recordingVoiceSelectEl.value;
+                } else if (voiceSelectEl && voiceSelectEl.value && mode !== 'mode2_chirp') {
                     voiceId = voiceSelectEl.value;
                 } else {
-                    const vRes = await fetch(`${API_BASE}/api/voice-convert/voices`);
-                    if (!vRes.ok) throw new Error(`ボイス一覧取得失敗: ${vRes.status}`);
-                    const vData = await vRes.json();
-                    voiceId = vData.voices && vData.voices[0] && vData.voices[0].voice_id;
+                    const voices = await ensureElevenLabsVoicesLoaded();
+                    voiceId = voices[0] && voices[0].voice_id;
+                    populateRecordingVoiceSelect(voiceId);
                 }
                 if (!voiceId) throw new Error('利用可能なボイスがありません');
+
+                if (voiceSelectEl && mode !== 'mode2') {
+                    voiceSelectEl.value = voiceId;
+                }
 
                 const res = await fetch(`${LOCAL_API}/api/voice-convert/mode2/tts`, {
                     method: 'POST',
@@ -1414,6 +1426,44 @@
         let availableVoices = [];
         let convertedVideoBlob = null;
 
+        function populateRecordingVoiceSelect(selectedValue) {
+            const recordingVoiceSelect = document.getElementById('recordingVoiceSelect');
+            if (!recordingVoiceSelect) {
+                return;
+            }
+
+            if (availableVoices.length === 0) {
+                recordingVoiceSelect.innerHTML = '<option value="">利用可能なボイスがありません</option>';
+                recordingVoiceSelect.disabled = true;
+                return;
+            }
+
+            const nextValue = selectedValue || recordingVoiceSelect.value || availableVoices[0].voice_id;
+            recordingVoiceSelect.innerHTML = availableVoices.map(v =>
+                `<option value="${v.voice_id}">${v.name}</option>`
+            ).join('');
+            recordingVoiceSelect.disabled = false;
+            recordingVoiceSelect.value = availableVoices.some((voice) => voice.voice_id === nextValue)
+                ? nextValue
+                : availableVoices[0].voice_id;
+        }
+
+        async function ensureElevenLabsVoicesLoaded() {
+            if (availableVoices.length > 0) {
+                return availableVoices;
+            }
+
+            const res = await fetch(`${API_BASE}/api/voice-convert/voices`);
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+            }
+
+            const data = await res.json();
+            availableVoices = data.voices || [];
+            return availableVoices;
+        }
+
         async function loadVoices() {
             const voiceSelect = document.getElementById('voiceSelect');
             const mode = document.querySelector('input[name="convertMode"]:checked').value;
@@ -1446,24 +1496,29 @@
                 voiceSelect.disabled = false;
                 document.getElementById('previewVoiceBtn').classList.remove('hidden');
 
-                const res = await fetch(`${API_BASE}/api/voice-convert/voices`);
-                if (!res.ok) {
-                    const errorData = await res.json().catch(() => ({}));
-                    throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
-                }
-                const data = await res.json();
-                availableVoices = data.voices || [];
+                await ensureElevenLabsVoicesLoaded();
                 
                 if (availableVoices.length === 0) {
                     voiceSelect.innerHTML = '<option value="">利用可能なボイスがありません</option>';
+                    populateRecordingVoiceSelect();
                     return;
                 }
 
+                const selectedValue = availableVoices.some((voice) => voice.voice_id === voiceSelect.value)
+                    ? voiceSelect.value
+                    : undefined;
                 voiceSelect.innerHTML = availableVoices.map(v =>
                     `<option value="${v.voice_id}">${v.name}</option>`
                 ).join('');
+                voiceSelect.value = selectedValue || availableVoices[0].voice_id;
+                populateRecordingVoiceSelect(voiceSelect.value);
             } catch (e) {
                 voiceSelect.innerHTML = `<option value="">エラー: ${e.message}</option>`;
+                const recordingVoiceSelect = document.getElementById('recordingVoiceSelect');
+                if (recordingVoiceSelect) {
+                    recordingVoiceSelect.innerHTML = `<option value="">エラー: ${e.message}</option>`;
+                    recordingVoiceSelect.disabled = true;
+                }
                 console.error('Failed to load voices:', e);
             }
         }
@@ -1501,6 +1556,23 @@
                 updateConvertBtnState();
                 loadVoices();
             });
+        });
+
+        document.getElementById('voiceSelect').addEventListener('change', (event) => {
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+            if (mode === 'mode2') {
+                return;
+            }
+
+            populateRecordingVoiceSelect(event.target.value);
+        });
+
+        document.getElementById('recordingVoiceSelect').addEventListener('change', (event) => {
+            const voiceSelect = document.getElementById('voiceSelect');
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+            if (mode !== 'mode2' && voiceSelect && !voiceSelect.disabled) {
+                voiceSelect.value = event.target.value;
+            }
         });
 
         document.getElementById('previewVoiceBtn').onclick = async () => {
