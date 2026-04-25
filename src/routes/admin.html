@@ -95,12 +95,45 @@
         <!-- タブナビゲーション -->
         <div class="flex gap-1 mb-4 bg-zinc-800 p-1 rounded-lg shrink-0">
             <button id="tabRecording" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold active">録画</button>
+            <button id="tabBoardManager" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">ボード作成</button>
             <button id="tabVoiceConvert" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">音声変換</button>
             <button id="tabResult" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">結果</button>
         </div>
 
         <!-- 録画タブ -->
         <div id="contentRecording" class="tab-content flex-grow gap-4 md:gap-6 overflow-y-auto pr-1 active">
+            <section class="mt-auto border-t border-zinc-700 pt-4 flex flex-col gap-2 shrink-0">
+                <div class="flex flex-col gap-2">
+                    <button id="startAudioRecBtn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 rounded font-bold transition-colors">録音開始</button>
+                    <button id="stopAudioRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録音停止</button>
+                    <div id="audioRecStatus" class="text-xs text-zinc-400 hidden"></div>
+                    <div id="transcriptSection" class="hidden">
+                        <label for="transcriptInput" class="text-xs font-semibold text-zinc-400 mb-1 block">文字起こし結果（編集可能）</label>
+                        <textarea id="transcriptInput" rows="4" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm resize-y" placeholder="文字起こし結果がここに表示されます"></textarea>
+                        <div class="flex gap-2 mt-2">
+                            <button id="ttsConvertBtn" class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">音声変換</button>
+                            <button id="ttsPlayBtn" disabled class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">再生</button>
+                        </div>
+                        <div id="ttsStatus" class="text-xs text-zinc-400 mt-1 hidden"></div>
+                    </div>
+                    <div class="bg-zinc-800 rounded p-3">
+                        <div class="flex items-center justify-between gap-3 mb-2">
+                            <div>
+                                <div class="text-xs font-semibold text-zinc-400">保存済みボード</div>
+                                <div id="boardPlaybackStatus" class="text-sm text-zinc-200">0件</div>
+                            </div>
+                            <button id="nextBoardBtn" disabled class="py-2 px-4 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">ボード送り</button>
+                        </div>
+                        <div id="boardPlaybackHint" class="text-xs text-zinc-400">ボード作成タブで保存した順に切り替えます。</div>
+                    </div>
+                </div>
+                <button id="startRecBtn" disabled class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-bold transition-colors">録画開始</button>
+                <button id="stopRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録画停止</button>
+            </section>
+        </div>
+
+        <!-- ボード作成タブ -->
+        <div id="contentBoardManager" class="tab-content flex-grow gap-4 overflow-y-auto pr-1">
             <section>
                 <h2 class="text-sm font-semibold text-zinc-400 mb-2">操作説明</h2>
                 <ul class="text-xs space-y-1 text-zinc-300">
@@ -137,23 +170,21 @@
                 <button id="resetArrowsBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">矢印リセット</button>
             </section>
 
-            <section class="mt-auto border-t border-zinc-700 pt-4 flex flex-col gap-2 shrink-0">
-                <div class="flex flex-col gap-2">
-                    <button id="startAudioRecBtn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 rounded font-bold transition-colors">録音開始</button>
-                    <button id="stopAudioRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録音停止</button>
-                    <div id="audioRecStatus" class="text-xs text-zinc-400 hidden"></div>
-                    <div id="transcriptSection" class="hidden">
-                        <label for="transcriptInput" class="text-xs font-semibold text-zinc-400 mb-1 block">文字起こし結果（編集可能）</label>
-                        <textarea id="transcriptInput" rows="4" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm resize-y" placeholder="文字起こし結果がここに表示されます"></textarea>
-                        <div class="flex gap-2 mt-2">
-                            <button id="ttsConvertBtn" class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">音声変換</button>
-                            <button id="ttsPlayBtn" disabled class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">再生</button>
-                        </div>
-                        <div id="ttsStatus" class="text-xs text-zinc-400 mt-1 hidden"></div>
-                    </div>
+            <section>
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">現在の盤面を保存</h2>
+                <div class="space-y-2">
+                    <input id="boardNameInput" type="text" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm" placeholder="例: 攻撃パターン 1">
+                    <button id="saveBoardBtn" class="w-full py-3 bg-amber-500 text-black hover:bg-amber-400 rounded font-bold transition-colors">このボードを保存</button>
+                    <div id="boardEditorStatus" class="text-xs text-zinc-400">配置した選手と矢印をそのまま保存します。</div>
                 </div>
-                <button id="startRecBtn" disabled class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-bold transition-colors">録画開始</button>
-                <button id="stopRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録画停止</button>
+            </section>
+
+            <section>
+                <div class="flex items-center justify-between mb-2 gap-3">
+                    <h2 class="text-sm font-semibold text-zinc-400">保存済みボード</h2>
+                    <span id="boardCountLabel" class="text-xs text-zinc-500">0件</span>
+                </div>
+                <div id="boardList" class="space-y-2"></div>
             </section>
         </div>
 
@@ -261,10 +292,16 @@
         // それ以外（file://, localhost 等）はデプロイ済みWorkerを叩く。
         const DEPLOYED_API = 'https://vamos-line.bvv-1.workers.dev';
         const API_BASE = location.host.endsWith('workers.dev') ? '' : DEPLOYED_API;
+        // mode2/tts (ElevenLabs TTS) はデプロイ済みWorkerに未反映なのでローカルWorkerを叩く
+        // ローカル(127.0.0.1/localhost)から開いていれば同一オリジン、それ以外はlocalhostに直接
+        const LOCAL_API = (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+            ? ''
+            : 'http://127.0.0.1:8787';
 
         // ========== タブ管理 ==========
         const tabs = {
             recording: { btn: document.getElementById('tabRecording'), content: document.getElementById('contentRecording') },
+            boardManager: { btn: document.getElementById('tabBoardManager'), content: document.getElementById('contentBoardManager') },
             voiceConvert: { btn: document.getElementById('tabVoiceConvert'), content: document.getElementById('contentVoiceConvert') },
             result: { btn: document.getElementById('tabResult'), content: document.getElementById('contentResult') }
         };
@@ -278,6 +315,10 @@
             // タブ切り替え時にボイス一覧が空ならロードを試みる
             if (tabName === 'voiceConvert' && availableVoices.length === 0) {
                 loadVoices();
+            }
+
+            if (tabName === 'boardManager') {
+                renderBoardList();
             }
         }
 
@@ -306,6 +347,230 @@
         const PITCH_TOP = 1920 / 2;
         const PITCH_HEIGHT = 1920 / 2;
         const CANVAS_WIDTH = 1080;
+        const BOARD_STORAGE_KEY = 'vamos.savedBoards.v1';
+
+        let savedBoards = [];
+        let activeBoardIndex = -1;
+
+        function cloneObjectsState(items) {
+            return items.map((item) => ({ ...item }));
+        }
+
+        function cloneArrowsState(items) {
+            return items.map((arrow) => ({
+                start: { ...arrow.start },
+                end: { ...arrow.end }
+            }));
+        }
+
+        function buildBoardName() {
+            return `ボード ${savedBoards.length + 1}`;
+        }
+
+        function setBoardEditorStatus(message, isError = false) {
+            const status = document.getElementById('boardEditorStatus');
+            status.textContent = message;
+            status.classList.toggle('text-red-400', isError);
+            status.classList.toggle('text-zinc-400', !isError);
+        }
+
+        function updateBoardPlaybackUI() {
+            const nextBoardBtn = document.getElementById('nextBoardBtn');
+            const status = document.getElementById('boardPlaybackStatus');
+            const hint = document.getElementById('boardPlaybackHint');
+
+            if (savedBoards.length === 0) {
+                nextBoardBtn.disabled = true;
+                status.textContent = '0件';
+                hint.textContent = 'ボード作成タブで保存すると、ここから順番に切り替えられます。';
+                return;
+            }
+
+            const hasNextBoard = activeBoardIndex + 1 < savedBoards.length;
+            nextBoardBtn.disabled = !hasNextBoard;
+
+            if (activeBoardIndex >= 0 && activeBoardIndex < savedBoards.length) {
+                status.textContent = `現在: ${savedBoards[activeBoardIndex].name}`;
+            } else {
+                status.textContent = `未呼び出し (${savedBoards.length}件)`;
+            }
+
+            if (hasNextBoard) {
+                const nextBoard = savedBoards[activeBoardIndex + 1];
+                hint.textContent = `次に表示: ${nextBoard.name} (${activeBoardIndex + 2}/${savedBoards.length})`;
+            } else {
+                hint.textContent = `最後のボードまで表示済みです (${savedBoards.length}/${savedBoards.length})。`;
+            }
+        }
+
+        function persistBoards() {
+            try {
+                localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(savedBoards));
+            } catch (error) {
+                console.warn('Failed to persist boards:', error);
+                setBoardEditorStatus('ボード保存に失敗しました。ブラウザの保存領域を確認してください。', true);
+            }
+        }
+
+        function createBoardId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+
+            return `board_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        }
+
+        function createBoardSnapshot(name) {
+            return {
+                id: createBoardId(),
+                name,
+                objects: cloneObjectsState(objects),
+                arrows: cloneArrowsState(arrows),
+                createdAt: Date.now()
+            };
+        }
+
+        function applyBoardSnapshot(board, index = -1) {
+            objects = cloneObjectsState(board.objects || []);
+            arrows = cloneArrowsState(board.arrows || []);
+            activeBoardIndex = index;
+            updatePlayerUI();
+            updateBoardPlaybackUI();
+        }
+
+        function loadBoardsFromStorage() {
+            try {
+                const raw = localStorage.getItem(BOARD_STORAGE_KEY);
+                if (!raw) {
+                    savedBoards = [];
+                    return;
+                }
+
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed)) {
+                    savedBoards = [];
+                    return;
+                }
+
+                savedBoards = parsed
+                    .filter((board) => board && Array.isArray(board.objects) && Array.isArray(board.arrows))
+                    .map((board, index) => ({
+                        id: typeof board.id === 'string' ? board.id : createBoardId(),
+                        name: typeof board.name === 'string' && board.name.trim() ? board.name.trim() : `ボード ${index + 1}`,
+                        objects: cloneObjectsState(board.objects),
+                        arrows: cloneArrowsState(board.arrows),
+                        createdAt: typeof board.createdAt === 'number' ? board.createdAt : Date.now()
+                    }));
+            } catch (error) {
+                console.warn('Failed to restore boards:', error);
+                savedBoards = [];
+                setBoardEditorStatus('保存済みボードの読み込みに失敗しました。', true);
+            }
+        }
+
+        function renderBoardList() {
+            const boardList = document.getElementById('boardList');
+            const boardCountLabel = document.getElementById('boardCountLabel');
+            boardCountLabel.textContent = `${savedBoards.length}件`;
+
+            if (savedBoards.length === 0) {
+                boardList.innerHTML = '<div class="bg-zinc-800 border border-dashed border-zinc-700 rounded p-4 text-sm text-zinc-400">まだボードがありません。録画タブで盤面を作って保存してください。</div>';
+                updateBoardPlaybackUI();
+                return;
+            }
+
+            boardList.innerHTML = savedBoards.map((board, index) => {
+                const isActive = index === activeBoardIndex;
+                return `
+                    <div class="bg-zinc-800 border ${isActive ? 'border-amber-400' : 'border-zinc-700'} rounded p-3">
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                                <div class="font-semibold text-sm">${index + 1}. ${board.name}</div>
+                                <div class="text-xs text-zinc-400">選手 ${board.objects.filter((item) => item.type === 'player').length} / 矢印 ${board.arrows.length}</div>
+                            </div>
+                            <div class="text-[10px] uppercase tracking-wide ${isActive ? 'text-amber-300' : 'text-zinc-500'}">${isActive ? 'current' : 'saved'}</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button data-action="load" data-index="${index}" class="py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition-colors">呼び出す</button>
+                            <button data-action="delete" data-index="${index}" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm font-semibold transition-colors">削除</button>
+                            <button data-action="up" data-index="${index}" ${index === 0 ? 'disabled' : ''} class="py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:cursor-not-allowed rounded text-sm font-semibold transition-colors">上へ</button>
+                            <button data-action="down" data-index="${index}" ${index === savedBoards.length - 1 ? 'disabled' : ''} class="py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:cursor-not-allowed rounded text-sm font-semibold transition-colors">下へ</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            updateBoardPlaybackUI();
+        }
+
+        function saveCurrentBoard() {
+            const input = document.getElementById('boardNameInput');
+            const name = input.value.trim() || buildBoardName();
+            savedBoards.push(createBoardSnapshot(name));
+            persistBoards();
+            input.value = buildBoardName();
+            setBoardEditorStatus(`「${name}」を保存しました。`);
+            renderBoardList();
+        }
+
+        function moveBoard(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= savedBoards.length) {
+                return;
+            }
+
+            const temp = savedBoards[index];
+            savedBoards[index] = savedBoards[targetIndex];
+            savedBoards[targetIndex] = temp;
+
+            if (activeBoardIndex === index) {
+                activeBoardIndex = targetIndex;
+            } else if (activeBoardIndex === targetIndex) {
+                activeBoardIndex = index;
+            }
+
+            persistBoards();
+            renderBoardList();
+            setBoardEditorStatus('ボードの順番を変更しました。');
+        }
+
+        function deleteBoard(index) {
+            const [removedBoard] = savedBoards.splice(index, 1);
+            if (!removedBoard) {
+                return;
+            }
+
+            if (activeBoardIndex === index) {
+                activeBoardIndex = -1;
+            } else if (activeBoardIndex > index) {
+                activeBoardIndex -= 1;
+            }
+
+            persistBoards();
+            renderBoardList();
+            setBoardEditorStatus(`「${removedBoard.name}」を削除しました。`);
+        }
+
+        function loadBoard(index) {
+            const board = savedBoards[index];
+            if (!board) {
+                return;
+            }
+
+            applyBoardSnapshot(board, index);
+            switchTab('recording');
+            setBoardEditorStatus(`「${board.name}」を呼び出しました。`);
+        }
+
+        function goToNextBoard() {
+            const nextIndex = activeBoardIndex + 1;
+            if (nextIndex >= savedBoards.length) {
+                updateBoardPlaybackUI();
+                return;
+            }
+
+            applyBoardSnapshot(savedBoards[nextIndex], nextIndex);
+        }
 
         function updatePlayerUI() {
             const redPlayers = objects.filter(o => o.team === 'red').length;
@@ -602,6 +867,41 @@
 
         document.getElementById('resetLayoutBtn').onclick = resetLayout;
         document.getElementById('resetArrowsBtn').onclick = resetArrows;
+        document.getElementById('saveBoardBtn').onclick = saveCurrentBoard;
+        document.getElementById('nextBoardBtn').onclick = goToNextBoard;
+
+        document.getElementById('boardList').onclick = (event) => {
+            const button = event.target.closest('button[data-action]');
+            if (!button) {
+                return;
+            }
+
+            const index = Number(button.dataset.index);
+            const action = button.dataset.action;
+
+            if (Number.isNaN(index)) {
+                return;
+            }
+
+            if (action === 'load') {
+                loadBoard(index);
+                return;
+            }
+
+            if (action === 'delete') {
+                deleteBoard(index);
+                return;
+            }
+
+            if (action === 'up') {
+                moveBoard(index, -1);
+                return;
+            }
+
+            if (action === 'down') {
+                moveBoard(index, 1);
+            }
+        };
 
         // ========== 録画機能 ==========
         const startRecBtn = document.getElementById('startRecBtn');
@@ -687,7 +987,29 @@
             audioRecStatus.classList.toggle('hidden', !show);
         }
 
+        function cleanupSttAudioStream() {
+            if (sttAudioStream) {
+                sttAudioStream.getTracks().forEach((t) => t.stop());
+                sttAudioStream = null;
+            }
+        }
+
         startAudioRecBtn.onclick = async () => {
+            if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                setAudioRecStatus('録音には HTTPS または localhost が必要です。');
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setAudioRecStatus('このブラウザはマイク録音に対応していません。');
+                return;
+            }
+
+            if (typeof MediaRecorder === 'undefined') {
+                setAudioRecStatus('このブラウザは MediaRecorder に対応していません。Chrome を使用してください。');
+                return;
+            }
+
             try {
                 sttAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (e) {
@@ -695,31 +1017,44 @@
                 return;
             }
 
-            sttAudioChunks = [];
-            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                ? 'audio/webm;codecs=opus'
-                : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
-            sttAudioRecorder = mimeType
-                ? new MediaRecorder(sttAudioStream, { mimeType })
-                : new MediaRecorder(sttAudioStream);
+            try {
+                sttAudioChunks = [];
+                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
 
-            sttAudioRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) sttAudioChunks.push(e.data);
-            };
+                sttAudioRecorder = mimeType
+                    ? new MediaRecorder(sttAudioStream, { mimeType })
+                    : new MediaRecorder(sttAudioStream);
 
-            sttAudioRecorder.onstop = async () => {
-                if (sttAudioStream) {
-                    sttAudioStream.getTracks().forEach((t) => t.stop());
-                    sttAudioStream = null;
-                }
-                const blob = new Blob(sttAudioChunks, { type: sttAudioRecorder.mimeType || 'audio/webm' });
-                await transcribeAudio(blob);
-            };
+                sttAudioRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) sttAudioChunks.push(e.data);
+                };
 
-            sttAudioRecorder.start();
-            setAudioRecStatus('録音中...');
-            startAudioRecBtn.classList.add('hidden');
-            stopAudioRecBtn.classList.remove('hidden');
+                sttAudioRecorder.onerror = (event) => {
+                    console.error('MediaRecorder error:', event.error || event);
+                    cleanupSttAudioStream();
+                    setAudioRecStatus(`録音エラー: ${event.error?.message || '録音の初期化に失敗しました。'}`);
+                    stopAudioRecBtn.classList.add('hidden');
+                    startAudioRecBtn.classList.remove('hidden');
+                };
+
+                sttAudioRecorder.onstop = async () => {
+                    cleanupSttAudioStream();
+                    const blob = new Blob(sttAudioChunks, { type: sttAudioRecorder.mimeType || 'audio/webm' });
+                    await transcribeAudio(blob);
+                };
+
+                sttAudioRecorder.start();
+                setAudioRecStatus('録音中...');
+                startAudioRecBtn.classList.add('hidden');
+                stopAudioRecBtn.classList.remove('hidden');
+            } catch (e) {
+                console.error('Failed to start audio recording:', e);
+                cleanupSttAudioStream();
+                const message = e instanceof Error ? e.message : '録音を開始できませんでした。';
+                setAudioRecStatus(`録音開始エラー: ${message}`);
+            }
         };
 
         stopAudioRecBtn.onclick = () => {
@@ -798,7 +1133,7 @@
                 }
                 if (!voiceId) throw new Error('利用可能なボイスがありません');
 
-                const res = await fetch(`${API_BASE}/api/voice-convert/mode2/tts`, {
+                const res = await fetch(`${LOCAL_API}/api/voice-convert/mode2/tts`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text, voice_id: voiceId })
@@ -1436,11 +1771,16 @@
             recordedAudioBlob = null;
             convertedVideoBlob = null;
             document.getElementById('startConvertBtn').disabled = true;
+            activeBoardIndex = -1;
+            updateBoardPlaybackUI();
             switchTab('recording');
         };
 
         // 初期化
         initObjects();
+        loadBoardsFromStorage();
+        document.getElementById('boardNameInput').value = buildBoardName();
+        renderBoardList();
         render();
         loadVoices();
     </script>

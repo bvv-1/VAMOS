@@ -22,11 +22,12 @@
 
 ### 2.2 右ペイン: 操作パネル（幅 `md:w-96`）
 
-3 つのタブで構成：
+4 つのタブで構成：
 
 | タブ | ID | 役割 |
 | --- | --- | --- |
 | 録画 | `tabRecording` | 動画読み込み・選手配置・録画開始/停止 |
+| ボード作成 | `tabBoardManager` | 現在の盤面保存・順番変更・削除・呼び出し |
 | 音声変換 | `tabVoiceConvert` | 録音音声を AI ボイスへ変換 |
 | 結果 | `tabResult` | 変換結果のプレビュー・ダウンロード |
 
@@ -81,7 +82,14 @@
 - `#resetLayoutBtn`: ボール＋赤2/青2 の初期配置に戻す（`resetLayout()`）。
 - `#resetArrowsBtn`: `arrows[]` を空に。
 
-### 4.5 録画
+### 4.5 ボード送り
+
+- `#nextBoardBtn` で、保存済みボードを順番に Canvas へ適用する。
+- ボード順はボード作成タブの並び順をそのまま使う。
+- 初回押下で 1 件目、以後は次のボードへ進み、最後まで到達するとボタンは disabled になる。
+- 録画は従来どおり `canvas.captureStream(60)` のため、録画中にボードを送ると切り替えの様子もそのまま記録される。
+
+### 4.6 録画
 
 - `canvas.captureStream(60)` で 60fps の映像ストリーム取得。
 - `getUserMedia({ audio: true })` でマイクを取得。失敗時は映像のみ録画（警告ログのみ、UI ブロックなし）。
@@ -156,7 +164,15 @@
 4. 映像＋AI 音声を `MediaRecorder`（`videoBitsPerSecond: 5_000_000`）で録画。
 5. 動画 `onended` で停止し `convertedVideoBlob` を確定。
 
-## 6. 結果タブ機能
+## 6. ボード作成タブ機能
+
+- `#saveBoardBtn`: 現在の `objects[]` と `arrows[]` をスナップショットとして保存。
+- 保存データは `localStorage` (`vamos.savedBoards.v1`) に保持され、ページ再読込後も復元される。
+- 各ボードには `呼び出す`、`上へ`、`下へ`、`削除` を提供する。
+- `呼び出す` は保存済みボードを Canvas に反映し、録画タブへ戻して続きの編集や録画に使える状態にする。
+- `上へ` / `下へ` で変更した並び順は、そのまま `#nextBoardBtn` の送り順に反映される。
+
+## 7. 結果タブ機能
 
 - `#resultStatus`: 成功/フォールバック/失敗バッジを表示。フォールバックが起きた場合は黄色のメッセージ。
 - `#resultPreview`: `<video controls>` で `convertedVideoBlob` をプレビュー。
@@ -165,7 +181,7 @@
 - `#newRecordingBtn`: すべての Blob をクリアし、録画タブへ戻る。
 - `#errorSection`: エラー時に表示し、「Engチームに連絡してください」を案内。
 
-## 7. バックエンド API
+## 8. バックエンド API
 
 | メソッド | パス | 用途 | リクエスト |
 | --- | --- | --- | --- |
@@ -175,14 +191,14 @@
 | POST | `/api/voice-convert/mode2/stt` | Chirp 2 音声認識 | multipart: `audio`, `language` |
 | POST | `/api/voice-convert/mode2/tts-chirp` | Chirp 3 音声合成 | JSON: `text`, `language`, `voice_name` |
 
-## 8. スタイル / UX
+## 9. スタイル / UX
 
 - ベースカラー: `#1a1a1a`（背景）/ `#27272a`〜`#3f3f46`（ボーダー）/ アクセント `#3b82f6`（青）, `#ef4444`（赤）, `#22c55e`（緑/ダウンロード）。
 - TailwindCSS は CDN 読込（`https://cdn.tailwindcss.com`）。
 - レスポンシブ: 768px 以下は body を縦スクロール許可、Canvas を `height: 70vh` に縮小、右ペインを下に積む。
 - アニメーション: スピナー（CSS keyframes `spin`）、プログレスバーは `transition: width 0.3s`。
 
-## 9. 状態管理
+## 10. 状態管理
 
 すべてグローバル変数で保持（フレームワークなし）：
 
@@ -190,6 +206,7 @@
 | --- | --- |
 | `objects[]` | 選手・ボール |
 | `arrows[]` | 確定矢印 |
+| `savedBoards[]`, `activeBoardIndex` | 保存済みボードと現在の送り位置 |
 | `tempArrow` | ドラッグ中矢印 |
 | `isDragging`, `dragTarget`, `arrowStart` | ポインタ状態 |
 | `isVideoLoaded` | 動画読込済みフラグ |
@@ -199,9 +216,10 @@
 | `availableVoices[]` | ElevenLabs ボイス一覧 |
 | `audioManager` | `AudioProcessingManager` インスタンス |
 
-## 10. 既知の制約
+## 11. 既知の制約
 
 - 単一 HTML / Vanilla JS のためモジュール分割・型チェックなし。
 - `MediaRecorder` のサポート可否はブラウザに依存（Safari は MP4 限定）。
 - Mode2 の音声合成は単一チャンネル（モノラル）で、各セグメントの線形リサンプリングのため音質劣化の可能性あり。
 - マイク許可がない場合は音声変換不可（`recordedAudioBlob` が `null`）。
+- 保存済みボードはブラウザの `localStorage` にのみ保持され、端末間共有はされない。
