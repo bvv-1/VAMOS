@@ -138,6 +138,20 @@
             </section>
 
             <section class="mt-auto border-t border-zinc-700 pt-4 flex flex-col gap-2 shrink-0">
+                <div class="flex flex-col gap-2">
+                    <button id="startAudioRecBtn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 rounded font-bold transition-colors">録音開始</button>
+                    <button id="stopAudioRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録音停止</button>
+                    <div id="audioRecStatus" class="text-xs text-zinc-400 hidden"></div>
+                    <div id="transcriptSection" class="hidden">
+                        <label for="transcriptInput" class="text-xs font-semibold text-zinc-400 mb-1 block">文字起こし結果（編集可能）</label>
+                        <textarea id="transcriptInput" rows="4" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm resize-y" placeholder="文字起こし結果がここに表示されます"></textarea>
+                        <div class="flex gap-2 mt-2">
+                            <button id="ttsConvertBtn" class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">音声変換</button>
+                            <button id="ttsPlayBtn" disabled class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">再生</button>
+                        </div>
+                        <div id="ttsStatus" class="text-xs text-zinc-400 mt-1 hidden"></div>
+                    </div>
+                </div>
                 <button id="startRecBtn" disabled class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-bold transition-colors">録画開始</button>
                 <button id="stopRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録画停止</button>
             </section>
@@ -162,7 +176,20 @@
                             <div class="text-xs text-zinc-400">音声認識 + 音声合成</div>
                         </div>
                     </label>
+                    <label class="flex items-center gap-3 bg-zinc-800 p-3 rounded cursor-pointer hover:bg-zinc-700">
+                        <input type="radio" name="convertMode" value="mode_tts" class="accent-blue-500">
+                        <div>
+                            <div class="font-semibold text-sm">TTS（テキスト読み上げ）</div>
+                            <div class="text-xs text-zinc-400">入力テキストから音声生成 (ElevenLabs)</div>
+                        </div>
+                    </label>
                 </div>
+            </section>
+
+            <section id="ttsTextSection" class="hidden">
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">読み上げテキスト</h2>
+                <textarea id="ttsTextInput" rows="4" maxlength="2000" placeholder="ここに読み上げるテキストを入力してください" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm resize-y"></textarea>
+                <div class="text-xs text-zinc-500 mt-1"><span id="ttsTextCount">0</span> / 2000 文字</div>
             </section>
 
             <section>
@@ -229,6 +256,12 @@
     </div>
 
     <script>
+        // ========== API ベースURL ==========
+        // Worker自身がこのHTMLを配信している場合は同一オリジン（相対パス）。
+        // それ以外（file://, localhost 等）はデプロイ済みWorkerを叩く。
+        const DEPLOYED_API = 'https://vamos-line.bvv-1.workers.dev';
+        const API_BASE = location.host.endsWith('workers.dev') ? '' : DEPLOYED_API;
+
         // ========== タブ管理 ==========
         const tabs = {
             recording: { btn: document.getElementById('tabRecording'), content: document.getElementById('contentRecording') },
@@ -605,7 +638,7 @@
                 audioRecorder.ondataavailable = (e) => audioChunks.push(e.data);
                 audioRecorder.onstop = () => {
                     recordedAudioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    document.getElementById('startConvertBtn').disabled = false;
+                    updateConvertBtnState();
                 };
                 audioRecorder.start();
                 window._audioRecorder = audioRecorder;
@@ -618,6 +651,7 @@
             mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
             mediaRecorder.onstop = () => {
                 recordedVideoBlob = new Blob(recordedChunks, { type: mimeType });
+                updateConvertBtnState();
                 // 音声変換タブに遷移
                 switchTab('voiceConvert');
                 loadVoices();
@@ -637,6 +671,177 @@
             stopRecBtn.classList.add('hidden');
         };
 
+        // ========== 録音 + STT (Speech-to-Text) ==========
+        const startAudioRecBtn = document.getElementById('startAudioRecBtn');
+        const stopAudioRecBtn = document.getElementById('stopAudioRecBtn');
+        const audioRecStatus = document.getElementById('audioRecStatus');
+        const transcriptSection = document.getElementById('transcriptSection');
+        const transcriptInput = document.getElementById('transcriptInput');
+
+        let sttAudioRecorder = null;
+        let sttAudioChunks = [];
+        let sttAudioStream = null;
+
+        function setAudioRecStatus(text, show = true) {
+            audioRecStatus.textContent = text;
+            audioRecStatus.classList.toggle('hidden', !show);
+        }
+
+        startAudioRecBtn.onclick = async () => {
+            try {
+                sttAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (e) {
+                setAudioRecStatus('マイクの使用が拒否されました。');
+                return;
+            }
+
+            sttAudioChunks = [];
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+            sttAudioRecorder = mimeType
+                ? new MediaRecorder(sttAudioStream, { mimeType })
+                : new MediaRecorder(sttAudioStream);
+
+            sttAudioRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) sttAudioChunks.push(e.data);
+            };
+
+            sttAudioRecorder.onstop = async () => {
+                if (sttAudioStream) {
+                    sttAudioStream.getTracks().forEach((t) => t.stop());
+                    sttAudioStream = null;
+                }
+                const blob = new Blob(sttAudioChunks, { type: sttAudioRecorder.mimeType || 'audio/webm' });
+                await transcribeAudio(blob);
+            };
+
+            sttAudioRecorder.start();
+            setAudioRecStatus('録音中...');
+            startAudioRecBtn.classList.add('hidden');
+            stopAudioRecBtn.classList.remove('hidden');
+        };
+
+        stopAudioRecBtn.onclick = () => {
+            if (sttAudioRecorder && sttAudioRecorder.state !== 'inactive') {
+                sttAudioRecorder.stop();
+            }
+            stopAudioRecBtn.classList.add('hidden');
+            startAudioRecBtn.classList.remove('hidden');
+            setAudioRecStatus('文字起こし中...');
+        };
+
+        async function transcribeAudio(audioBlob) {
+            try {
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                formData.append('language', 'ja-JP');
+
+                const res = await fetch(`${API_BASE}/api/voice-convert/mode2/stt`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || `STT failed: ${res.status}`);
+                }
+
+                const data = await res.json();
+                const transcript = data.transcript || '';
+                transcriptSection.classList.remove('hidden');
+                transcriptInput.value = transcript;
+                setAudioRecStatus(transcript ? '文字起こし完了（編集可能）' : '文字起こし結果が空でした。');
+            } catch (e) {
+                console.error('STT error:', e);
+                setAudioRecStatus(`文字起こしエラー: ${e.message}`);
+            }
+        }
+
+        // ========== 文字起こし結果の TTS 変換・再生 ==========
+        const ttsConvertBtn = document.getElementById('ttsConvertBtn');
+        const ttsPlayBtn = document.getElementById('ttsPlayBtn');
+        const ttsStatus = document.getElementById('ttsStatus');
+        let ttsAudioUrl = null;
+        let ttsAudioElement = null;
+
+        function setTtsStatus(text, show = true) {
+            ttsStatus.textContent = text;
+            ttsStatus.classList.toggle('hidden', !show);
+        }
+
+        ttsConvertBtn.onclick = async () => {
+            const text = transcriptInput.value.trim();
+            if (!text) {
+                setTtsStatus('テキストを入力してください');
+                return;
+            }
+
+            ttsConvertBtn.disabled = true;
+            ttsPlayBtn.disabled = true;
+            setTtsStatus('音声変換中...');
+
+            try {
+                // ボイスID 決定: 音声変換タブで ElevenLabs ボイスが選択されていればそれを使用、
+                // なければボイス一覧の先頭を使う
+                let voiceId = null;
+                const voiceSelectEl = document.getElementById('voiceSelect');
+                const modeRadio = document.querySelector('input[name="convertMode"]:checked');
+                const mode = modeRadio ? modeRadio.value : null;
+                if (voiceSelectEl && voiceSelectEl.value && mode !== 'mode2_chirp') {
+                    voiceId = voiceSelectEl.value;
+                } else {
+                    const vRes = await fetch(`${API_BASE}/api/voice-convert/voices`);
+                    if (!vRes.ok) throw new Error(`ボイス一覧取得失敗: ${vRes.status}`);
+                    const vData = await vRes.json();
+                    voiceId = vData.voices && vData.voices[0] && vData.voices[0].voice_id;
+                }
+                if (!voiceId) throw new Error('利用可能なボイスがありません');
+
+                const res = await fetch(`${API_BASE}/api/voice-convert/mode2/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice_id: voiceId })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || `TTS failed: ${res.status}`);
+                }
+
+                const data = await res.json();
+                const binary = atob(data.audio_base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'audio/mpeg' });
+
+                if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
+                ttsAudioUrl = URL.createObjectURL(blob);
+                ttsPlayBtn.disabled = false;
+                setTtsStatus('音声変換完了。再生ボタンで聴けます。');
+            } catch (e) {
+                console.error('TTS error:', e);
+                setTtsStatus(`エラー: ${e.message}`);
+            } finally {
+                ttsConvertBtn.disabled = false;
+            }
+        };
+
+        ttsPlayBtn.onclick = () => {
+            if (!ttsAudioUrl) return;
+            if (ttsAudioElement) {
+                ttsAudioElement.pause();
+                ttsAudioElement.currentTime = 0;
+            }
+            ttsAudioElement = new Audio(ttsAudioUrl);
+            ttsAudioElement.play().catch((e) => {
+                console.error('Audio play error:', e);
+                setTtsStatus(`再生エラー: ${e.message}`);
+            });
+        };
+
         // ========== 音声変換 ==========
         let availableVoices = [];
         let convertedVideoBlob = null;
@@ -649,8 +854,9 @@
             voiceSelect.disabled = true;
 
             try {
+                // mode_tts と mode1 はどちらも ElevenLabs ボイスを使う
                 if (mode === 'mode2') {
-                    const res = await fetch('/api/voice-convert/voices-chirp');
+                    const res = await fetch(`${API_BASE}/api/voice-convert/voices-chirp`);
                     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                     const data = await res.json();
                     const chirpVoices = data.voices || [];
@@ -672,7 +878,7 @@
                 voiceSelect.disabled = false;
                 document.getElementById('previewVoiceBtn').classList.remove('hidden');
 
-                const res = await fetch('/api/voice-convert/voices');
+                const res = await fetch(`${API_BASE}/api/voice-convert/voices`);
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
                     throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
@@ -694,9 +900,37 @@
             }
         }
 
+        // TTSテキストUIの表示切替
+        function updateTTSUIVisibility() {
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+            const ttsSection = document.getElementById('ttsTextSection');
+            if (mode === 'mode_tts') {
+                ttsSection.classList.remove('hidden');
+            } else {
+                ttsSection.classList.add('hidden');
+            }
+        }
+
+        // 変換開始ボタンの有効化条件: mode_tts は動画のみ必要、それ以外は音声必要
+        function updateConvertBtnState() {
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+            const btn = document.getElementById('startConvertBtn');
+            if (mode === 'mode_tts') {
+                btn.disabled = !recordedVideoBlob;
+            } else {
+                btn.disabled = !recordedAudioBlob;
+            }
+        }
+
+        document.getElementById('ttsTextInput').addEventListener('input', (e) => {
+            document.getElementById('ttsTextCount').textContent = e.target.value.length;
+        });
+
         // モード切替時の処理
         document.querySelectorAll('input[name="convertMode"]').forEach(radio => {
             radio.addEventListener('change', () => {
+                updateTTSUIVisibility();
+                updateConvertBtnState();
                 loadVoices();
             });
         });
@@ -747,9 +981,42 @@
             getModeLabel(mode) {
                 const labels = {
                     'mode1': 'Voice Changer',
-                    'mode2_chirp': 'STT-TTS (Chirp 3)'
+                    'mode2_chirp': 'STT-TTS (Chirp 3)',
+                    'mode_tts': 'TTS (テキスト読み上げ)'
                 };
                 return labels[mode] || mode;
+            }
+
+            async executeTTS(text, voiceId, targetDurationMs) {
+                this.currentMode = 'mode_tts';
+                this.updateProgress(20, 'ElevenLabs TTS で音声生成中...');
+
+                const body = { text, voice_id: voiceId };
+                if (targetDurationMs) {
+                    body.target_duration_ms = targetDurationMs;
+                }
+
+                const res = await fetch(`${API_BASE}/api/voice-convert/mode2/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || `TTS failed: ${res.status}`);
+                }
+
+                const data = await res.json();
+                this.updateProgress(80, '音声データ処理中...');
+
+                // base64 -> ArrayBuffer
+                const binary = atob(data.audio_base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return bytes.buffer;
             }
 
             async executeMode(mode, audioBlob, voiceId) {
@@ -766,7 +1033,7 @@
                 formData.append('audio', audioBlob);
                 formData.append('voice_id', voiceId);
 
-                const res = await fetch('/api/voice-convert/mode1', {
+                const res = await fetch(`${API_BASE}/api/voice-convert/mode1`, {
                     method: 'POST',
                     body: formData
                 });
@@ -783,7 +1050,7 @@
                 sttFormData.append('audio', audioBlob);
                 sttFormData.append('language', 'ja-JP');
 
-                const sttRes = await fetch('/api/voice-convert/mode2/stt', {
+                const sttRes = await fetch(`${API_BASE}/api/voice-convert/mode2/stt`, {
                     method: 'POST',
                     body: sttFormData
                 });
@@ -804,7 +1071,7 @@
                     const progress = 50 + (40 * (i + 1) / segments.length);
                     this.updateProgress(progress, `音声合成中... (${i + 1}/${segments.length})`);
 
-                    const ttsRes = await fetch('/api/voice-convert/mode2/tts-chirp', {
+                    const ttsRes = await fetch(`${API_BASE}/api/voice-convert/mode2/tts-chirp`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -953,18 +1220,63 @@
         const audioManager = new AudioProcessingManager();
 
         document.getElementById('startConvertBtn').onclick = async () => {
-            if (!recordedAudioBlob) {
-                showError('音声データがありません。録画時にマイクを許可してください。');
-                return;
-            }
-
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
             const voiceId = document.getElementById('voiceSelect').value;
             if (!voiceId) {
                 showError('ボイスを選択してください。');
                 return;
             }
 
-            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+            // TTS モード: 録画音声不要、テキスト入力必須
+            if (mode === 'mode_tts') {
+                if (!recordedVideoBlob) {
+                    showError('動画データがありません。先に録画を行ってください。');
+                    return;
+                }
+                const text = document.getElementById('ttsTextInput').value.trim();
+                if (!text) {
+                    showError('読み上げるテキストを入力してください。');
+                    return;
+                }
+
+                document.getElementById('progressSection').classList.remove('hidden');
+                document.getElementById('startConvertBtn').disabled = true;
+
+                try {
+                    // 動画の長さに合わせる（任意のヒントとして渡す）
+                    let targetDurationMs;
+                    if (recordedVideoBlob) {
+                        const tmpVideo = document.createElement('video');
+                        tmpVideo.src = URL.createObjectURL(recordedVideoBlob);
+                        await new Promise((resolve) => {
+                            tmpVideo.onloadedmetadata = resolve;
+                            tmpVideo.onerror = resolve;
+                        });
+                        if (isFinite(tmpVideo.duration) && tmpVideo.duration > 0) {
+                            targetDurationMs = Math.round(tmpVideo.duration * 1000);
+                        }
+                        URL.revokeObjectURL(tmpVideo.src);
+                    }
+
+                    const audioBuffer = await audioManager.executeTTS(text, voiceId, targetDurationMs);
+                    audioManager.updateProgress(100, '変換完了!');
+                    await createConvertedVideo(audioBuffer);
+                    switchTab('result');
+                    showResult('mode_tts', false);
+                } catch (e) {
+                    showError(`TTS変換中にエラーが発生しました: ${e.message}`);
+                    switchTab('result');
+                }
+
+                document.getElementById('progressSection').classList.add('hidden');
+                document.getElementById('startConvertBtn').disabled = false;
+                return;
+            }
+
+            if (!recordedAudioBlob) {
+                showError('音声データがありません。録画時にマイクを許可してください。');
+                return;
+            }
 
             document.getElementById('progressSection').classList.remove('hidden');
             document.getElementById('startConvertBtn').disabled = true;
