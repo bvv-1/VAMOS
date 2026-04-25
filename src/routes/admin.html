@@ -94,8 +94,8 @@
     <div class="w-full md:w-96 bg-zinc-900 p-4 md:p-6 border-t md:border-t-0 md:border-l border-zinc-700 md:h-screen flex flex-col">
         <!-- タブナビゲーション -->
         <div class="flex gap-1 mb-4 bg-zinc-800 p-1 rounded-lg shrink-0">
-            <button id="tabRecording" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold active">録画</button>
             <button id="tabBoardManager" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">ボード作成</button>
+            <button id="tabRecording" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold active">録画</button>
             <button id="tabVoiceConvert" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">音声変換</button>
             <button id="tabResult" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">結果</button>
         </div>
@@ -104,24 +104,6 @@
         <div id="contentRecording" class="tab-content flex-grow gap-4 md:gap-6 overflow-y-auto pr-1 active">
             <section class="mt-auto border-t border-zinc-700 pt-4 flex flex-col gap-2 shrink-0">
                 <div class="flex flex-col gap-2">
-                    <button id="startAudioRecBtn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 rounded font-bold transition-colors">録音開始</button>
-                    <button id="stopAudioRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録音停止</button>
-                    <div id="audioRecStatus" class="text-xs text-zinc-400 hidden"></div>
-                    <div id="transcriptSection" class="hidden">
-                        <label for="transcriptInput" class="text-xs font-semibold text-zinc-400 mb-1 block">文字起こし結果（編集可能）</label>
-                        <textarea id="transcriptInput" rows="4" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm resize-y" placeholder="文字起こし結果がここに表示されます"></textarea>
-                        <div class="mt-2">
-                            <label for="recordingVoiceSelect" class="text-xs font-semibold text-zinc-400 mb-1 block">ボイス選択</label>
-                            <select id="recordingVoiceSelect" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm">
-                                <option value="">読み込み中...</option>
-                            </select>
-                        </div>
-                        <div class="flex gap-2 mt-2">
-                            <button id="ttsConvertBtn" class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">音声変換</button>
-                            <button id="ttsPlayBtn" disabled class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">再生</button>
-                        </div>
-                        <div id="ttsStatus" class="text-xs text-zinc-400 mt-1 hidden"></div>
-                    </div>
                     <div class="bg-zinc-800 rounded p-3">
                         <div class="flex items-center justify-between gap-3 mb-2">
                             <div>
@@ -135,6 +117,7 @@
                         </div>
                         <div id="boardPlaybackHint" class="text-xs text-zinc-400">ボード作成タブで保存した順に切り替えます。</div>
                     </div>
+                    <button id="resetToInitialScreenBtn" class="w-full py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm transition-colors">初期画面に戻る</button>
                 </div>
                 <button id="startRecBtn" disabled class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-bold transition-colors">録画開始</button>
                 <button id="stopRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録画停止</button>
@@ -734,6 +717,47 @@
             document.getElementById('blueIncBtn').disabled = bluePlayers >= 11;
         }
 
+        function buildInitialLayoutWithCounts(redCount = 2, blueCount = 2) {
+            const nextObjects = [
+                { id: 'ball', x: 540, y: PITCH_TOP + 480, r: 25, color: '#fff', type: 'ball' }
+            ];
+
+            const createPlayers = (team, count, x, color) => {
+                if (count <= 0) {
+                    return;
+                }
+
+                const spacing = PITCH_HEIGHT / (count + 1);
+                for (let index = 0; index < count; index += 1) {
+                    nextObjects.push({
+                        x,
+                        y: PITCH_TOP + (spacing * (index + 1)),
+                        r: 35,
+                        color,
+                        type: 'player',
+                        team
+                    });
+                }
+            };
+
+            createPlayers('red', redCount, 300, '#ef4444');
+            createPlayers('blue', blueCount, 780, '#3b82f6');
+
+            return nextObjects;
+        }
+
+        function getInitialBoardCounts() {
+            const firstBoard = savedBoards[0];
+            if (!firstBoard || !Array.isArray(firstBoard.objects)) {
+                return { redCount: 2, blueCount: 2 };
+            }
+
+            return {
+                redCount: firstBoard.objects.filter((item) => item.team === 'red').length,
+                blueCount: firstBoard.objects.filter((item) => item.team === 'blue').length,
+            };
+        }
+
         function resetLayout() {
             objects = [
                 { id: 'ball', x: 540, y: PITCH_TOP + 480, r: 25, color: '#fff', type: 'ball' },
@@ -747,6 +771,22 @@
 
         function resetArrows() { arrows = []; }
         function initObjects() { resetLayout(); resetArrows(); }
+
+        function resetToInitialScreen() {
+            const { redCount, blueCount } = getInitialBoardCounts();
+            objects = buildInitialLayoutWithCounts(redCount, blueCount);
+            resetArrows();
+            activeBoardIndex = -1;
+
+            if (isVideoLoaded) {
+                video.currentTime = 0;
+            }
+
+            syncBoardTimestampInput(0);
+            updatePlayerUI();
+            updateBoardPlaybackUI();
+            renderBoardList();
+        }
 
         window.changePlayerCount = (team, delta) => {
             const count = objects.filter(o => o.team === team).length;
@@ -1025,6 +1065,7 @@
 
         document.getElementById('resetLayoutBtn').onclick = resetLayout;
         document.getElementById('resetArrowsBtn').onclick = resetArrows;
+        document.getElementById('resetToInitialScreenBtn').onclick = resetToInitialScreen;
         document.getElementById('saveBoardBtn').onclick = saveCurrentBoard;
         document.getElementById('prevBoardBtn').onclick = goToPrevBoard;
         document.getElementById('nextBoardBtn').onclick = goToNextBoard;
@@ -1210,243 +1251,9 @@
             stopRecBtn.classList.add('hidden');
         };
 
-        // ========== 録音 + STT (Speech-to-Text) ==========
-        const startAudioRecBtn = document.getElementById('startAudioRecBtn');
-        const stopAudioRecBtn = document.getElementById('stopAudioRecBtn');
-        const audioRecStatus = document.getElementById('audioRecStatus');
-        const transcriptSection = document.getElementById('transcriptSection');
-        const transcriptInput = document.getElementById('transcriptInput');
-
-        let sttAudioRecorder = null;
-        let sttAudioChunks = [];
-        let sttAudioStream = null;
-
-        function setAudioRecStatus(text, show = true) {
-            audioRecStatus.textContent = text;
-            audioRecStatus.classList.toggle('hidden', !show);
-        }
-
-        function cleanupSttAudioStream() {
-            if (sttAudioStream) {
-                sttAudioStream.getTracks().forEach((t) => t.stop());
-                sttAudioStream = null;
-            }
-        }
-
-        startAudioRecBtn.onclick = async () => {
-            if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                setAudioRecStatus('録音には HTTPS または localhost が必要です。');
-                return;
-            }
-
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setAudioRecStatus('このブラウザはマイク録音に対応していません。');
-                return;
-            }
-
-            if (typeof MediaRecorder === 'undefined') {
-                setAudioRecStatus('このブラウザは MediaRecorder に対応していません。Chrome を使用してください。');
-                return;
-            }
-
-            try {
-                sttAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            } catch (e) {
-                setAudioRecStatus('マイクの使用が拒否されました。');
-                return;
-            }
-
-            try {
-                sttAudioChunks = [];
-                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                    ? 'audio/webm;codecs=opus'
-                    : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
-
-                sttAudioRecorder = mimeType
-                    ? new MediaRecorder(sttAudioStream, { mimeType })
-                    : new MediaRecorder(sttAudioStream);
-
-                sttAudioRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) sttAudioChunks.push(e.data);
-                };
-
-                sttAudioRecorder.onerror = (event) => {
-                    console.error('MediaRecorder error:', event.error || event);
-                    cleanupSttAudioStream();
-                    setAudioRecStatus(`録音エラー: ${event.error?.message || '録音の初期化に失敗しました。'}`);
-                    stopAudioRecBtn.classList.add('hidden');
-                    startAudioRecBtn.classList.remove('hidden');
-                };
-
-                sttAudioRecorder.onstop = async () => {
-                    cleanupSttAudioStream();
-                    const blob = new Blob(sttAudioChunks, { type: sttAudioRecorder.mimeType || 'audio/webm' });
-                    await transcribeAudio(blob);
-                };
-
-                sttAudioRecorder.start();
-                setAudioRecStatus('録音中...');
-                startAudioRecBtn.classList.add('hidden');
-                stopAudioRecBtn.classList.remove('hidden');
-            } catch (e) {
-                console.error('Failed to start audio recording:', e);
-                cleanupSttAudioStream();
-                const message = e instanceof Error ? e.message : '録音を開始できませんでした。';
-                setAudioRecStatus(`録音開始エラー: ${message}`);
-            }
-        };
-
-        stopAudioRecBtn.onclick = () => {
-            if (sttAudioRecorder && sttAudioRecorder.state !== 'inactive') {
-                sttAudioRecorder.stop();
-            }
-            stopAudioRecBtn.classList.add('hidden');
-            startAudioRecBtn.classList.remove('hidden');
-            setAudioRecStatus('文字起こし中...');
-        };
-
-        async function transcribeAudio(audioBlob) {
-            try {
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'recording.webm');
-                formData.append('language', 'ja-JP');
-
-                const res = await fetch(`${API_BASE}/api/voice-convert/mode2/stt`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!res.ok) {
-                    const errorData = await res.json().catch(() => ({}));
-                    throw new Error(errorData.error || `STT failed: ${res.status}`);
-                }
-
-                const data = await res.json();
-                const transcript = data.transcript || '';
-                transcriptSection.classList.remove('hidden');
-                transcriptInput.value = transcript;
-                setAudioRecStatus(transcript ? '文字起こし完了（編集可能）' : '文字起こし結果が空でした。');
-            } catch (e) {
-                console.error('STT error:', e);
-                setAudioRecStatus(`文字起こしエラー: ${e.message}`);
-            }
-        }
-
-        // ========== 文字起こし結果の TTS 変換・再生 ==========
-        const ttsConvertBtn = document.getElementById('ttsConvertBtn');
-        const ttsPlayBtn = document.getElementById('ttsPlayBtn');
-        const ttsStatus = document.getElementById('ttsStatus');
-        let ttsAudioUrl = null;
-        let ttsAudioElement = null;
-
-        function setTtsStatus(text, show = true) {
-            ttsStatus.textContent = text;
-            ttsStatus.classList.toggle('hidden', !show);
-        }
-
-        ttsConvertBtn.onclick = async () => {
-            const text = transcriptInput.value.trim();
-            if (!text) {
-                setTtsStatus('テキストを入力してください');
-                return;
-            }
-
-            ttsConvertBtn.disabled = true;
-            ttsPlayBtn.disabled = true;
-            setTtsStatus('音声変換中...');
-
-            try {
-                // ボイスID 決定: 音声変換タブで ElevenLabs ボイスが選択されていればそれを使用、
-                // なければボイス一覧の先頭を使う
-                let voiceId = null;
-                const recordingVoiceSelectEl = document.getElementById('recordingVoiceSelect');
-                const voiceSelectEl = document.getElementById('voiceSelect');
-                const modeRadio = document.querySelector('input[name="convertMode"]:checked');
-                const mode = modeRadio ? modeRadio.value : null;
-                if (recordingVoiceSelectEl && recordingVoiceSelectEl.value) {
-                    voiceId = recordingVoiceSelectEl.value;
-                } else if (voiceSelectEl && voiceSelectEl.value && mode !== 'mode2_chirp') {
-                    voiceId = voiceSelectEl.value;
-                } else {
-                    const voices = await ensureElevenLabsVoicesLoaded();
-                    voiceId = voices[0] && voices[0].voice_id;
-                    populateRecordingVoiceSelect(voiceId);
-                }
-                if (!voiceId) throw new Error('利用可能なボイスがありません');
-
-                if (voiceSelectEl && mode !== 'mode2') {
-                    voiceSelectEl.value = voiceId;
-                }
-
-                const res = await fetch(`${LOCAL_API}/api/voice-convert/mode2/tts`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, voice_id: voiceId })
-                });
-
-                if (!res.ok) {
-                    const errorData = await res.json().catch(() => ({}));
-                    throw new Error(errorData.error || `TTS failed: ${res.status}`);
-                }
-
-                const data = await res.json();
-                const binary = atob(data.audio_base64);
-                const bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) {
-                    bytes[i] = binary.charCodeAt(i);
-                }
-                const blob = new Blob([bytes], { type: 'audio/mpeg' });
-
-                if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
-                ttsAudioUrl = URL.createObjectURL(blob);
-                ttsPlayBtn.disabled = false;
-                setTtsStatus('音声変換完了。再生ボタンで聴けます。');
-            } catch (e) {
-                console.error('TTS error:', e);
-                setTtsStatus(`エラー: ${e.message}`);
-            } finally {
-                ttsConvertBtn.disabled = false;
-            }
-        };
-
-        ttsPlayBtn.onclick = () => {
-            if (!ttsAudioUrl) return;
-            if (ttsAudioElement) {
-                ttsAudioElement.pause();
-                ttsAudioElement.currentTime = 0;
-            }
-            ttsAudioElement = new Audio(ttsAudioUrl);
-            ttsAudioElement.play().catch((e) => {
-                console.error('Audio play error:', e);
-                setTtsStatus(`再生エラー: ${e.message}`);
-            });
-        };
-
         // ========== 音声変換 ==========
         let availableVoices = [];
         let convertedVideoBlob = null;
-
-        function populateRecordingVoiceSelect(selectedValue) {
-            const recordingVoiceSelect = document.getElementById('recordingVoiceSelect');
-            if (!recordingVoiceSelect) {
-                return;
-            }
-
-            if (availableVoices.length === 0) {
-                recordingVoiceSelect.innerHTML = '<option value="">利用可能なボイスがありません</option>';
-                recordingVoiceSelect.disabled = true;
-                return;
-            }
-
-            const nextValue = selectedValue || recordingVoiceSelect.value || availableVoices[0].voice_id;
-            recordingVoiceSelect.innerHTML = availableVoices.map(v =>
-                `<option value="${v.voice_id}">${v.name}</option>`
-            ).join('');
-            recordingVoiceSelect.disabled = false;
-            recordingVoiceSelect.value = availableVoices.some((voice) => voice.voice_id === nextValue)
-                ? nextValue
-                : availableVoices[0].voice_id;
-        }
 
         async function ensureElevenLabsVoicesLoaded() {
             if (availableVoices.length > 0) {
@@ -1500,7 +1307,6 @@
                 
                 if (availableVoices.length === 0) {
                     voiceSelect.innerHTML = '<option value="">利用可能なボイスがありません</option>';
-                    populateRecordingVoiceSelect();
                     return;
                 }
 
@@ -1511,14 +1317,8 @@
                     `<option value="${v.voice_id}">${v.name}</option>`
                 ).join('');
                 voiceSelect.value = selectedValue || availableVoices[0].voice_id;
-                populateRecordingVoiceSelect(voiceSelect.value);
             } catch (e) {
                 voiceSelect.innerHTML = `<option value="">エラー: ${e.message}</option>`;
-                const recordingVoiceSelect = document.getElementById('recordingVoiceSelect');
-                if (recordingVoiceSelect) {
-                    recordingVoiceSelect.innerHTML = `<option value="">エラー: ${e.message}</option>`;
-                    recordingVoiceSelect.disabled = true;
-                }
                 console.error('Failed to load voices:', e);
             }
         }
@@ -1556,23 +1356,6 @@
                 updateConvertBtnState();
                 loadVoices();
             });
-        });
-
-        document.getElementById('voiceSelect').addEventListener('change', (event) => {
-            const mode = document.querySelector('input[name="convertMode"]:checked').value;
-            if (mode === 'mode2') {
-                return;
-            }
-
-            populateRecordingVoiceSelect(event.target.value);
-        });
-
-        document.getElementById('recordingVoiceSelect').addEventListener('change', (event) => {
-            const voiceSelect = document.getElementById('voiceSelect');
-            const mode = document.querySelector('input[name="convertMode"]:checked').value;
-            if (mode !== 'mode2' && voiceSelect && !voiceSelect.disabled) {
-                voiceSelect.value = event.target.value;
-            }
         });
 
         document.getElementById('previewVoiceBtn').onclick = async () => {
