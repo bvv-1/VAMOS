@@ -177,6 +177,11 @@
                 <h2 class="text-sm font-semibold text-zinc-400 mb-2">現在の盤面を保存</h2>
                 <div class="space-y-2">
                     <input id="boardNameInput" type="text" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm" placeholder="例: 攻撃パターン 1">
+                    <div>
+                        <label for="boardTimestampInput" class="text-xs font-semibold text-zinc-400 mb-1 block">タイムスタンプ</label>
+                        <input id="boardTimestampInput" type="text" inputmode="decimal" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm" placeholder="00:00.00">
+                        <div class="text-xs text-zinc-500 mt-1">左側の動画の現在位置が自動で入ります。必要なら mm:ss.xx で編集できます。</div>
+                    </div>
                     <button id="saveBoardBtn" class="w-full py-3 bg-amber-500 text-black hover:bg-amber-400 rounded font-bold transition-colors">このボードを保存</button>
                     <div id="boardEditorStatus" class="text-xs text-zinc-400">配置した選手と矢印をそのまま保存します。</div>
                 </div>
@@ -354,6 +359,54 @@
 
         let savedBoards = [];
         let activeBoardIndex = -1;
+        const boardTimestampDrafts = {};
+
+        function formatTimestampInput(sec) {
+            const safeSec = Number.isFinite(sec) && sec >= 0 ? sec : 0;
+            const minutes = Math.floor(safeSec / 60).toString().padStart(2, '0');
+            const seconds = (safeSec % 60).toFixed(2).padStart(5, '0');
+            return `${minutes}:${seconds}`;
+        }
+
+        function parseTimestampInput(value) {
+            const normalized = value.trim();
+            if (!normalized) {
+                return Number.isFinite(video.currentTime) ? video.currentTime : 0;
+            }
+
+            if (/^\d+(\.\d+)?$/.test(normalized)) {
+                return Number(normalized);
+            }
+
+            const parts = normalized.split(':');
+            if (parts.length === 2) {
+                const minutes = Number(parts[0]);
+                const seconds = Number(parts[1]);
+                if (Number.isFinite(minutes) && Number.isFinite(seconds) && seconds >= 0 && seconds < 60) {
+                    return (minutes * 60) + seconds;
+                }
+            }
+
+            return null;
+        }
+
+        function getClampedVideoTime(sec) {
+            const safeSec = Number.isFinite(sec) && sec >= 0 ? sec : 0;
+            if (Number.isFinite(video.duration) && video.duration > 0) {
+                return Math.min(safeSec, video.duration);
+            }
+
+            return safeSec;
+        }
+
+        function syncBoardTimestampInput(sec = video.currentTime) {
+            const input = document.getElementById('boardTimestampInput');
+            if (document.activeElement === input) {
+                return;
+            }
+
+            input.value = formatTimestampInput(getClampedVideoTime(sec));
+        }
 
         function cloneObjectsState(items) {
             return items.map((item) => ({ ...item }));
@@ -430,10 +483,11 @@
             return `board_${Date.now()}_${Math.random().toString(16).slice(2)}`;
         }
 
-        function createBoardSnapshot(name) {
+        function createBoardSnapshot(name, timestampSec) {
             return {
                 id: createBoardId(),
                 name,
+                timestampSec: getClampedVideoTime(timestampSec),
                 objects: cloneObjectsState(objects),
                 arrows: cloneArrowsState(arrows),
                 createdAt: Date.now()
@@ -444,6 +498,13 @@
             objects = cloneObjectsState(board.objects || []);
             arrows = cloneArrowsState(board.arrows || []);
             activeBoardIndex = index;
+            if (Number.isFinite(board.timestampSec)) {
+                const nextTime = getClampedVideoTime(board.timestampSec);
+                if (isVideoLoaded) {
+                    video.currentTime = nextTime;
+                }
+                syncBoardTimestampInput(nextTime);
+            }
             updatePlayerUI();
             updateBoardPlaybackUI();
         }
@@ -467,6 +528,7 @@
                     .map((board, index) => ({
                         id: typeof board.id === 'string' ? board.id : createBoardId(),
                         name: typeof board.name === 'string' && board.name.trim() ? board.name.trim() : `ボード ${index + 1}`,
+                        timestampSec: Number.isFinite(board.timestampSec) ? getClampedVideoTime(board.timestampSec) : 0,
                         objects: cloneObjectsState(board.objects),
                         arrows: cloneArrowsState(board.arrows),
                         createdAt: typeof board.createdAt === 'number' ? board.createdAt : Date.now()
@@ -491,16 +553,26 @@
 
             boardList.innerHTML = savedBoards.map((board, index) => {
                 const isActive = index === activeBoardIndex;
+                const timestampDraft = boardTimestampDrafts[board.id] ?? formatTimestampInput(board.timestampSec);
                 return `
                     <div data-action="load" data-index="${index}" class="bg-zinc-800 border ${isActive ? 'border-amber-400' : 'border-zinc-700'} rounded p-3 cursor-pointer transition-colors hover:border-amber-300">
                         <div class="flex items-start justify-between gap-3 mb-3">
                             <div>
                                 <div class="font-semibold text-sm">${index + 1}. ${board.name}</div>
-                                <div class="text-xs text-zinc-400">選手 ${board.objects.filter((item) => item.type === 'player').length} / 矢印 ${board.arrows.length}</div>
+                                <div class="text-xs text-zinc-400">選手 ${board.objects.filter((item) => item.type === 'player').length} / 矢印 ${board.arrows.length} / ${formatTimestampInput(board.timestampSec)}</div>
                             </div>
                             <div class="text-[10px] uppercase tracking-wide ${isActive ? 'text-amber-300' : 'text-zinc-500'}">${isActive ? 'current' : 'saved'}</div>
                         </div>
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="mb-3">
+                            <label for="boardCardTimestamp_${index}" class="text-xs font-semibold text-zinc-400 mb-1 block">タイムスタンプ</label>
+                            <div class="flex gap-2">
+                                <input id="boardCardTimestamp_${index}" data-role="board-timestamp-input" data-index="${index}" data-board-id="${board.id}" type="text" inputmode="decimal" value="${timestampDraft}" class="flex-1 bg-zinc-900 border border-zinc-700 rounded p-2 text-sm" placeholder="00:00.00">
+                                <button data-action="save-timestamp" data-index="${index}" class="py-2 px-3 bg-sky-600 hover:bg-sky-700 rounded text-sm font-semibold transition-colors">保存</button>
+                            </div>
+                            <div class="text-xs text-zinc-500 mt-1">入力中の値は動画へ即時反映されます。</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button data-action="rename" data-index="${index}" class="py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition-colors">名前変更</button>
                             <button data-action="delete" data-index="${index}" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm font-semibold transition-colors">削除</button>
                             <button data-action="up" data-index="${index}" ${index === 0 ? 'disabled' : ''} class="py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:cursor-not-allowed rounded text-sm font-semibold transition-colors">上へ</button>
                             <button data-action="down" data-index="${index}" ${index === savedBoards.length - 1 ? 'disabled' : ''} class="py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:cursor-not-allowed rounded text-sm font-semibold transition-colors">下へ</button>
@@ -515,7 +587,13 @@
         function saveCurrentBoard() {
             const input = document.getElementById('boardNameInput');
             const name = input.value.trim() || buildBoardName();
-            savedBoards.push(createBoardSnapshot(name));
+            const timestampSec = parseTimestampInput(document.getElementById('boardTimestampInput').value);
+            if (timestampSec === null) {
+                setBoardEditorStatus('タイムスタンプは mm:ss.xx または秒数で入力してください。', true);
+                return;
+            }
+
+            savedBoards.push(createBoardSnapshot(name, timestampSec));
             persistBoards();
             input.value = buildBoardName();
             setBoardEditorStatus(`「${name}」を保存しました。`);
@@ -549,6 +627,8 @@
                 return;
             }
 
+            delete boardTimestampDrafts[removedBoard.id];
+
             if (activeBoardIndex === index) {
                 activeBoardIndex = -1;
             } else if (activeBoardIndex > index) {
@@ -560,6 +640,50 @@
             setBoardEditorStatus(`「${removedBoard.name}」を削除しました。`);
         }
 
+        function renameBoard(index) {
+            const board = savedBoards[index];
+            if (!board) {
+                return;
+            }
+
+            const nextName = window.prompt('新しいボード名を入力してください。', board.name);
+            if (nextName === null) {
+                return;
+            }
+
+            const trimmedName = nextName.trim();
+            if (!trimmedName) {
+                setBoardEditorStatus('ボード名を空にはできません。', true);
+                return;
+            }
+
+            board.name = trimmedName;
+            persistBoards();
+            renderBoardList();
+            setBoardEditorStatus(`ボード名を「${trimmedName}」に変更しました。`);
+        }
+
+        function retimeBoard(index) {
+            const board = savedBoards[index];
+            if (!board) {
+                return;
+            }
+
+            const input = document.querySelector(`[data-role="board-timestamp-input"][data-index="${index}"]`);
+            const nextTimestamp = input ? input.value : (boardTimestampDrafts[board.id] ?? formatTimestampInput(board.timestampSec));
+            const parsedTimestamp = parseTimestampInput(nextTimestamp);
+            if (parsedTimestamp === null) {
+                setBoardEditorStatus('タイムスタンプは mm:ss.xx または秒数で入力してください。', true);
+                return;
+            }
+
+            board.timestampSec = getClampedVideoTime(parsedTimestamp);
+            boardTimestampDrafts[board.id] = formatTimestampInput(board.timestampSec);
+            persistBoards();
+            renderBoardList();
+            setBoardEditorStatus(`タイムスタンプを ${formatTimestampInput(board.timestampSec)} に変更しました。`);
+        }
+
         function loadBoard(index) {
             const board = savedBoards[index];
             if (!board) {
@@ -567,6 +691,7 @@
             }
 
             applyBoardSnapshot(board, index);
+            renderBoardList();
             setBoardEditorStatus(`「${board.name}」を呼び出しました。`);
         }
 
@@ -844,6 +969,7 @@
                 video.onloadedmetadata = () => {
                     isVideoLoaded = true;
                     document.getElementById('startRecBtn').disabled = false;
+                    syncBoardTimestampInput(video.currentTime);
                     video.play();
                 };
             }
@@ -874,8 +1000,16 @@
             if (!video.duration) return;
             seekBar.value = (video.currentTime / video.duration) * 100;
             timeDisplay.innerText = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+            syncBoardTimestampInput(video.currentTime);
         };
-        seekBar.oninput = () => { if (video.duration) video.currentTime = (seekBar.value / 100) * video.duration; };
+        seekBar.oninput = () => {
+            if (!video.duration) {
+                return;
+            }
+
+            video.currentTime = (seekBar.value / 100) * video.duration;
+            syncBoardTimestampInput(video.currentTime);
+        };
 
         function formatTime(sec) {
             const m = Math.floor(sec / 60).toString().padStart(2, '0');
@@ -888,6 +1022,65 @@
         document.getElementById('saveBoardBtn').onclick = saveCurrentBoard;
         document.getElementById('prevBoardBtn').onclick = goToPrevBoard;
         document.getElementById('nextBoardBtn').onclick = goToNextBoard;
+        document.getElementById('boardTimestampInput').addEventListener('blur', (event) => {
+            const parsed = parseTimestampInput(event.target.value);
+            if (parsed === null) {
+                setBoardEditorStatus('タイムスタンプは mm:ss.xx または秒数で入力してください。', true);
+                syncBoardTimestampInput(video.currentTime);
+                return;
+            }
+
+            event.target.value = formatTimestampInput(getClampedVideoTime(parsed));
+        });
+
+        document.getElementById('boardList').addEventListener('input', (event) => {
+            const input = event.target.closest('[data-role="board-timestamp-input"]');
+            if (!input) {
+                return;
+            }
+
+            const index = Number(input.dataset.index);
+            const boardId = input.dataset.boardId;
+            if (Number.isNaN(index)) {
+                return;
+            }
+
+            boardTimestampDrafts[boardId] = input.value;
+            const parsed = parseTimestampInput(input.value);
+            if (parsed === null) {
+                return;
+            }
+
+            const nextTime = getClampedVideoTime(parsed);
+            if (isVideoLoaded) {
+                video.currentTime = nextTime;
+            }
+            syncBoardTimestampInput(nextTime);
+        });
+
+        document.getElementById('boardList').addEventListener('blur', (event) => {
+            const input = event.target.closest('[data-role="board-timestamp-input"]');
+            if (!input) {
+                return;
+            }
+
+            const index = Number(input.dataset.index);
+            const boardId = input.dataset.boardId;
+            if (Number.isNaN(index)) {
+                return;
+            }
+
+            const parsed = parseTimestampInput(input.value);
+            if (parsed === null) {
+                input.value = boardTimestampDrafts[boardId] ?? formatTimestampInput(savedBoards[index]?.timestampSec ?? 0);
+                setBoardEditorStatus('タイムスタンプは mm:ss.xx または秒数で入力してください。', true);
+                return;
+            }
+
+            const normalized = formatTimestampInput(getClampedVideoTime(parsed));
+            boardTimestampDrafts[boardId] = normalized;
+            input.value = normalized;
+        }, true);
 
         document.getElementById('boardList').onclick = (event) => {
             const button = event.target.closest('button[data-action]');
@@ -896,6 +1089,16 @@
                 const action = button.dataset.action;
 
                 if (Number.isNaN(index)) {
+                    return;
+                }
+
+                if (action === 'rename') {
+                    renameBoard(index);
+                    return;
+                }
+
+                if (action === 'save-timestamp') {
+                    retimeBoard(index);
                     return;
                 }
 
@@ -912,6 +1115,10 @@
                 if (action === 'down') {
                     moveBoard(index, 1);
                 }
+                return;
+            }
+
+            if (event.target.closest('[data-role="board-timestamp-input"]')) {
                 return;
             }
 
