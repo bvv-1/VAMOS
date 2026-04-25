@@ -22,9 +22,14 @@ export async function handleVoiceConvert(
 	}
 
 	try {
-		// GET /api/voice-convert/voices - ボイス一覧取得
+		// GET /api/voice-convert/voices - ElevenLabs ボイス一覧取得
 		if (path === "/api/voice-convert/voices" && request.method === "GET") {
 			return await handleGetVoices(env, corsHeaders);
+		}
+
+		// GET /api/voice-convert/voices-chirp - Google Cloud Chirp 3 ボイス一覧取得
+		if (path === "/api/voice-convert/voices-chirp" && request.method === "GET") {
+			return await handleGetChirpVoices(env, corsHeaders);
 		}
 
 		// POST /api/voice-convert/mode1 - Voice Changer
@@ -35,11 +40,6 @@ export async function handleVoiceConvert(
 		// POST /api/voice-convert/mode2/stt - Speech to Text
 		if (path === "/api/voice-convert/mode2/stt" && request.method === "POST") {
 			return await handleMode2STT(request, env, corsHeaders);
-		}
-
-		// POST /api/voice-convert/mode2/tts - ElevenLabs TTS
-		if (path === "/api/voice-convert/mode2/tts" && request.method === "POST") {
-			return await handleMode2TTS(request, env, corsHeaders);
 		}
 
 		// POST /api/voice-convert/mode2/tts-chirp - Google Cloud TTS (Chirp 3)
@@ -87,6 +87,29 @@ async function handleGetVoices(
 		});
 	} catch (error) {
 		console.error("Error in handleGetVoices:", error);
+		throw error; // handleVoiceConvert でキャッチされる
+	}
+}
+
+/**
+ * GET /api/voice-convert/voices-chirp
+ * Google Cloud Chirp 3 ボイス一覧を取得
+ */
+async function handleGetChirpVoices(
+	env: Env,
+	corsHeaders: Record<string, string>
+): Promise<Response> {
+	try {
+		const googleCloud = new GoogleCloudClient(
+			env.GOOGLE_CLOUD_CREDENTIALS,
+			env.GOOGLE_CLOUD_PROJECT_ID
+		);
+		const voices = await googleCloud.getChirp3Voices();
+		return new Response(JSON.stringify({ voices }), {
+			headers: { ...corsHeaders, "Content-Type": "application/json" },
+		});
+	} catch (error) {
+		console.error("Error in handleGetChirpVoices:", error);
 		throw error; // handleVoiceConvert でキャッチされる
 	}
 }
@@ -157,49 +180,6 @@ async function handleMode2STT(
 	return new Response(JSON.stringify(result), {
 		headers: { ...corsHeaders, "Content-Type": "application/json" },
 	});
-}
-
-/**
- * POST /api/voice-convert/mode2/tts
- * ElevenLabs Text-to-Speech (Multilingual v3)
- */
-async function handleMode2TTS(
-	request: Request,
-	env: Env,
-	corsHeaders: Record<string, string>
-): Promise<Response> {
-	const body = (await request.json()) as {
-		text: string;
-		voice_id: string;
-		target_duration_ms?: number;
-	};
-
-	if (!body.text || !body.voice_id) {
-		return new Response(
-			JSON.stringify({ error: "text and voice_id are required" }),
-			{
-				status: 400,
-				headers: { ...corsHeaders, "Content-Type": "application/json" },
-			}
-		);
-	}
-
-	const elevenlabs = new ElevenLabsClient(env.ELEVENLABS_API_KEY);
-	const result = await elevenlabs.textToSpeech(
-		body.text,
-		body.voice_id,
-		body.target_duration_ms
-	);
-
-	return new Response(
-		JSON.stringify({
-			audio_base64: result.audioBase64,
-			actual_duration_ms: result.actualDurationMs,
-		}),
-		{
-			headers: { ...corsHeaders, "Content-Type": "application/json" },
-		}
-	);
 }
 
 /**

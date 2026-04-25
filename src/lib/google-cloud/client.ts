@@ -18,27 +18,24 @@ export class GoogleCloudClient {
 	private tokenExpiry: number = 0;
 
 	constructor(credentialsBase64: string, projectId: string) {
-		let credentialsJson: string;
-		try {
-			// credentialsBase64がJSON形式（{から始まる）ならそのまま使い、そうでなければatobでデコードを試みる
-			const trimmed = credentialsBase64.trim();
-			if (trimmed.startsWith("{")) {
-				credentialsJson = trimmed;
-			} else {
-				credentialsJson = atob(trimmed);
-			}
-		} catch (e) {
-			// atobで失敗したがJSONかもしれない場合の最終チェック
-			const trimmed = credentialsBase64.trim();
-			if (trimmed.startsWith("{")) {
-				credentialsJson = trimmed;
-			} else {
-				throw new Error(
-					"GOOGLE_CLOUD_CREDENTIALS must be a base64-encoded JSON or a raw JSON string."
-				);
-			}
+		if (!credentialsBase64) {
+			throw new Error(
+				"GOOGLE_CLOUD_CREDENTIALS is missing. Please set it using 'wrangler secret put GOOGLE_CLOUD_CREDENTIALS < service-account.json'."
+			);
 		}
-		this.credentials = JSON.parse(credentialsJson) as ServiceAccountCredentials;
+
+		const trimmed = credentialsBase64.trim();
+
+		try {
+			// 直接JSONとしてパースを試みる
+			this.credentials = JSON.parse(trimmed) as ServiceAccountCredentials;
+		} catch (e) {
+			throw new Error(
+				`GOOGLE_CLOUD_CREDENTIALS JSON error: ${
+					e instanceof Error ? e.message : "Unknown error"
+				}. Ensure the secret is the raw JSON content of your Service Account key file (starts with "{").`
+			);
+		}
 		this.projectId = projectId;
 	}
 
@@ -163,22 +160,25 @@ export class GoogleCloudClient {
 		}
 		const audioBase64 = btoa(binary);
 
-		// Speech-to-Text V2 API (Chirp 3)
-		const recognizer = `projects/${this.projectId}/locations/global/recognizers/_`;
+		// Speech-to-Text V2 API (Chirp 2)
+		const location = "asia-southeast1";
+		const recognizer = `projects/${this.projectId}/locations/${location}/recognizers/_`;
 
 		const requestBody = {
 			config: {
+				model: "chirp_2",
 				features: {
 					enableWordTimeOffsets: true,
 					enableWordConfidence: true,
 				},
 				autoDecodingConfig: {},
+				languageCodes: [languageCode],
 			},
 			content: audioBase64,
 		};
 
 		const response = await fetch(
-			`https://speech.googleapis.com/v2/${recognizer}:recognize`,
+			`https://${location}-speech.googleapis.com/v2/${recognizer}:recognize`,
 			{
 				method: "POST",
 				headers: {
@@ -257,21 +257,26 @@ export class GoogleCloudClient {
 		// Chirp 3音声の選択（日本語対応）
 		const voice = voiceName || "ja-JP-Chirp3-HD-Aoede";
 
+		// SSMLを使用して正確な終了時間を取得するためのマークを挿入
+		const ssml = `<speak>${text}<mark name="end"/></speak>`;
+
 		const requestBody = {
-			input: { text },
+			input: { ssml },
 			voice: {
 				languageCode,
 				name: voice,
 			},
 			audioConfig: {
-				audioEncoding: "MP3",
+				audioEncoding: "LINEAR16",
+				sampleRateHertz: 48000,
 				speakingRate: 1.0,
 				pitch: 0.0,
 			},
+			enableTimePointing: ["SSML_MARK"],
 		};
 
 		const response = await fetch(
-			`https://texttospeech.googleapis.com/v1/text:synthesize`,
+			`https://texttospeech.googleapis.com/v1beta1/text:synthesize`,
 			{
 				method: "POST",
 				headers: {
@@ -289,14 +294,24 @@ export class GoogleCloudClient {
 
 		const data = (await response.json()) as {
 			audioContent: string;
+			timepoints?: Array<{
+				markName: string;
+				timeSeconds: number;
+			}>;
 		};
 
-		// 音声の長さを推定（MP3からの正確な取得は複雑なので、テキスト長から推定）
-		const estimatedDurationMs = text.length * 150; // 1文字あたり約150ms
+		// タイムポイントから正確な終了時間を取得
+		let actualDurationMs = text.length * 150; // フォールバック
+		if (data.timepoints) {
+			const endMark = data.timepoints.find((t) => t.markName === "end");
+			if (endMark) {
+				actualDurationMs = endMark.timeSeconds * 1000;
+			}
+		}
 
 		return {
 			audioBase64: data.audioContent,
-			actualDurationMs: estimatedDurationMs,
+			actualDurationMs,
 		};
 	}
 
@@ -309,7 +324,7 @@ export class GoogleCloudClient {
 		const accessToken = await this.getAccessToken();
 
 		const response = await fetch(
-			`https://texttospeech.googleapis.com/v1/voices?languageCode=${languageCode}`,
+			`https://texttospeech.googleapis.com/v1beta1/voices?languageCode=${languageCode}`,
 			{
 				headers: {
 					Authorization: `Bearer ${accessToken}`,

@@ -643,7 +643,35 @@
 
         async function loadVoices() {
             const voiceSelect = document.getElementById('voiceSelect');
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+
+            voiceSelect.innerHTML = '<option value="">読み込み中...</option>';
+            voiceSelect.disabled = true;
+
             try {
+                if (mode === 'mode2') {
+                    const res = await fetch('/api/voice-convert/voices-chirp');
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    const data = await res.json();
+                    const chirpVoices = data.voices || [];
+                    
+                    if (chirpVoices.length === 0) {
+                        voiceSelect.innerHTML = '<option value="">利用可能なボイスがありません</option>';
+                        return;
+                    }
+
+                    voiceSelect.innerHTML = chirpVoices.map(v =>
+                        `<option value="${v.name}">${v.name} (${v.gender})</option>`
+                    ).join('');
+                    voiceSelect.disabled = false;
+                    // Chirp 3はプレビュー不可（APIがプレビューURLを返さないため）
+                    document.getElementById('previewVoiceBtn').classList.add('hidden');
+                    return;
+                }
+
+                voiceSelect.disabled = false;
+                document.getElementById('previewVoiceBtn').classList.remove('hidden');
+
                 const res = await fetch('/api/voice-convert/voices');
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
@@ -665,6 +693,13 @@
                 console.error('Failed to load voices:', e);
             }
         }
+
+        // モード切替時の処理
+        document.querySelectorAll('input[name="convertMode"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                loadVoices();
+            });
+        });
 
         document.getElementById('previewVoiceBtn').onclick = async () => {
             const voiceId = document.getElementById('voiceSelect').value;
@@ -691,8 +726,8 @@
 
             async executeWithFallback(audioBlob, voiceId, preferredMode) {
                 const modes = preferredMode === 'mode1'
-                    ? ['mode1', 'mode2_elevenlabs', 'mode2_chirp']
-                    : ['mode2_elevenlabs', 'mode2_chirp', 'mode1'];
+                    ? ['mode1', 'mode2_chirp']
+                    : ['mode2_chirp', 'mode1'];
 
                 for (const mode of modes) {
                     try {
@@ -712,8 +747,7 @@
             getModeLabel(mode) {
                 const labels = {
                     'mode1': 'Voice Changer',
-                    'mode2_elevenlabs': 'ElevenLabs TTS',
-                    'mode2_chirp': 'Google Chirp TTS'
+                    'mode2_chirp': 'STT-TTS (Chirp 3)'
                 };
                 return labels[mode] || mode;
             }
@@ -722,7 +756,7 @@
                 if (mode === 'mode1') {
                     return await this.executeMode1(audioBlob, voiceId);
                 } else {
-                    return await this.executeMode2(audioBlob, voiceId, mode === 'mode2_chirp');
+                    return await this.executeMode2(audioBlob, voiceId);
                 }
             }
 
@@ -742,9 +776,9 @@
                 return await res.arrayBuffer();
             }
 
-            async executeMode2(audioBlob, voiceId, useChirp = false) {
+            async executeMode2(audioBlob, voiceId) {
                 // Step 1: STT
-                this.updateProgress(20, '音声認識中...');
+                this.updateProgress(20, '音声認識中 (Chirp 2)...');
                 const sttFormData = new FormData();
                 sttFormData.append('audio', audioBlob);
                 sttFormData.append('language', 'ja-JP');
@@ -756,10 +790,13 @@
 
                 if (!sttRes.ok) throw new Error(`STT failed: ${sttRes.status}`);
                 const sttData = await sttRes.json();
-                this.updateProgress(50, '音声認識完了、音声合成中...');
+                this.updateProgress(50, '音声認識完了、音声合成中 (Chirp 3)...');
 
                 // Step 2: TTS（セグメント分割して生成）
                 const segments = this.segmentByPauses(sttData.words);
+                if (segments.length === 0) {
+                    throw new Error('音声から文字を認識できませんでした。');
+                }
                 const audioSegments = [];
 
                 for (let i = 0; i < segments.length; i++) {
@@ -767,15 +804,14 @@
                     const progress = 50 + (40 * (i + 1) / segments.length);
                     this.updateProgress(progress, `音声合成中... (${i + 1}/${segments.length})`);
 
-                    const endpoint = useChirp ? '/api/voice-convert/mode2/tts-chirp' : '/api/voice-convert/mode2/tts';
-                    const body = useChirp
-                        ? { text: segment.text, language: 'ja-JP' }
-                        : { text: segment.text, voice_id: voiceId, target_duration_ms: segment.duration * 1000 };
-
-                    const ttsRes = await fetch(endpoint, {
+                    const ttsRes = await fetch('/api/voice-convert/mode2/tts-chirp', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
+                        body: JSON.stringify({
+                            text: segment.text,
+                            language: 'ja-JP',
+                            voice_name: voiceId
+                        })
                     });
 
                     if (!ttsRes.ok) throw new Error(`TTS failed: ${ttsRes.status}`);
@@ -937,10 +973,19 @@
                 const result = await audioManager.executeWithFallback(recordedAudioBlob, voiceId, mode);
 
                 if (result.success) {
-                    audioManager.updateProgress(100, '変換完了!');
+                    const originalIsMode1 = mode === 'mode1';
+                    const resultIsMode1 = result.mode === 'mode1';
+                    const wasFallback = originalIsMode1 !== resultIsMode1;
+
+                    let msg = '変換完了!';
+                    if (wasFallback) {
+                        msg = `変換完了! (指定されたモードが失敗したため、${audioManager.getModeLabel(result.mode)}で代替処理しました)`;
+                    }
+
+                    audioManager.updateProgress(100, msg);
                     await createConvertedVideo(result.audio);
                     switchTab('result');
-                    showResult(result.mode);
+                    showResult(result.mode, wasFallback);
                 } else {
                     showError(result.error);
                     switchTab('result');
@@ -1018,13 +1063,17 @@
             });
         }
 
-        function showResult(mode) {
+        function showResult(mode, wasFallback = false) {
             document.getElementById('errorSection').classList.add('hidden');
             document.getElementById('resultActions').classList.remove('hidden');
 
             if (mode) {
+                let statusHtml = '<div class="text-green-400 font-semibold mb-2">変換成功</div>';
+                if (wasFallback) {
+                    statusHtml = '<div class="text-yellow-400 font-semibold mb-2">変換成功（フォールバック使用）</div>';
+                }
                 document.getElementById('resultStatus').innerHTML = `
-                    <div class="text-green-400 font-semibold mb-2">変換成功</div>
+                    ${statusHtml}
                     <div class="text-sm text-zinc-400">使用モード: ${audioManager.getModeLabel(mode)}</div>
                 `;
             } else {
