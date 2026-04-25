@@ -303,8 +303,10 @@
             voiceConvert: { btn: document.getElementById('tabVoiceConvert'), content: document.getElementById('contentVoiceConvert') },
             result: { btn: document.getElementById('tabResult'), content: document.getElementById('contentResult') }
         };
+        let activeTabName = 'recording';
 
         function switchTab(tabName) {
+            activeTabName = tabName;
             Object.entries(tabs).forEach(([name, { btn, content }]) => {
                 btn.classList.toggle('active', name === tabName);
                 content.classList.toggle('active', name === tabName);
@@ -436,6 +438,60 @@
                 button.onclick = () => loadBoard(index);
                 container.appendChild(button);
             });
+        }
+
+        function isTypingTarget(target) {
+            if (!(target instanceof HTMLElement)) {
+                return false;
+            }
+
+            if (target.isContentEditable) {
+                return true;
+            }
+
+            return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+        }
+
+        function handleRecordingKeyboardShortcut(event) {
+            if (activeTabName !== 'recording') {
+                return;
+            }
+
+            if (event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) {
+                return;
+            }
+
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                const prevBoardBtn = document.getElementById('prevBoardBtn');
+                if (!prevBoardBtn.disabled) {
+                    prevBoardBtn.click();
+                }
+                return;
+            }
+
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                const nextBoardBtn = document.getElementById('nextBoardBtn');
+                if (!nextBoardBtn.disabled) {
+                    nextBoardBtn.click();
+                }
+                return;
+            }
+
+            if (event.key === ' ') {
+                event.preventDefault();
+                document.getElementById('resetToInitialScreenBtn').click();
+                return;
+            }
+
+            if (/^[1-9]$/.test(event.key)) {
+                const boardIndex = Number.parseInt(event.key, 10) - 1;
+                if (boardIndex < savedBoards.length) {
+                    event.preventDefault();
+                    loadBoard(boardIndex);
+                }
+            }
         }
 
         function updateBoardPlaybackUI() {
@@ -1090,6 +1146,7 @@
         document.getElementById('saveBoardBtn').onclick = saveCurrentBoard;
         document.getElementById('prevBoardBtn').onclick = goToPrevBoard;
         document.getElementById('nextBoardBtn').onclick = goToNextBoard;
+        document.addEventListener('keydown', handleRecordingKeyboardShortcut);
         document.getElementById('boardTimestampInput').addEventListener('blur', (event) => {
             const parsed = parseTimestampInput(event.target.value);
             if (parsed === null) {
