@@ -1838,7 +1838,21 @@
             return new Promise((resolve, reject) => {
                 videoElement.onloadedmetadata = async () => {
                     try {
-                        const videoStream = videoElement.captureStream ? videoElement.captureStream() : videoElement.mozCaptureStream();
+                        // Unify video capture using canvas for all browsers (required for Safari)
+                        const canvas = document.createElement('canvas');
+                        canvas.width = videoElement.videoWidth;
+                        canvas.height = videoElement.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        const videoStream = canvas.captureStream(30);
+                        
+                        const drawLoop = () => {
+                            if (!videoElement.paused && !videoElement.ended) {
+                                ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                                requestAnimationFrame(drawLoop);
+                            }
+                        };
+                        videoElement.addEventListener('play', drawLoop);
+
                         const combinedStream = new MediaStream([
                             ...videoStream.getVideoTracks(),
                             ...destination.stream.getAudioTracks()
