@@ -192,6 +192,14 @@
             </section>
 
             <section>
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">矢印の種類</h2>
+                <div class="flex gap-2 bg-zinc-800 p-1 rounded-lg">
+                    <button id="arrowStyleSolid" class="flex-1 py-2 px-3 rounded text-sm font-semibold bg-blue-600 text-white">実線</button>
+                    <button id="arrowStyleDashed" class="flex-1 py-2 px-3 rounded text-sm font-semibold text-zinc-400 hover:text-white transition-colors">点線</button>
+                </div>
+            </section>
+
+            <section>
                 <h2 class="text-sm font-semibold text-zinc-400 mb-2">現在の盤面を保存</h2>
                 <div class="space-y-2">
                     <input id="boardNameInput" type="text" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm" placeholder="例: 攻撃パターン 1">
@@ -368,6 +376,7 @@
         let selectedObject = null;
         let arrowStart = null;
         let tempArrow = null;
+        let currentArrowStyle = 'solid';
         let isVideoLoaded = false;
 
         let mediaRecorder;
@@ -438,7 +447,8 @@
         function cloneArrowsState(items) {
             return items.map((arrow) => ({
                 start: { ...arrow.start },
-                end: { ...arrow.end }
+                end: { ...arrow.end },
+                style: arrow.style || 'solid'
             }));
         }
 
@@ -940,23 +950,31 @@
             ctx.restore();
         }
 
-        function drawArrow(start, end, color = "yellow") {
+        function drawArrow(start, end, style = 'solid', color = "yellow") {
             const headlen = 30;
             const dx = end.x - start.x, dy = end.y - start.y;
             const angle = Math.atan2(dy, dx);
+            ctx.save();
             ctx.strokeStyle = color;
             ctx.lineWidth = 8;
             ctx.lineCap = "round";
+            if (style === 'dashed') {
+                ctx.setLineDash([20, 20]);
+            } else {
+                ctx.setLineDash([]);
+            }
             ctx.beginPath();
             ctx.moveTo(start.x, start.y);
             ctx.lineTo(end.x, end.y);
             ctx.stroke();
+            ctx.setLineDash([]);
             ctx.beginPath();
             ctx.moveTo(end.x, end.y);
             ctx.lineTo(end.x - headlen * Math.cos(angle - Math.PI / 6), end.y - headlen * Math.sin(angle - Math.PI / 6));
             ctx.moveTo(end.x, end.y);
             ctx.lineTo(end.x - headlen * Math.cos(angle + Math.PI / 6), end.y - headlen * Math.sin(angle + Math.PI / 6));
             ctx.stroke();
+            ctx.restore();
         }
 
         function drawPentagon(ctx, x, y, r, rotation = 0) {
@@ -1008,8 +1026,8 @@
             }
 
             drawField();
-            arrows.forEach(a => drawArrow(a.start, a.end));
-            if (tempArrow) drawArrow(tempArrow.start, tempArrow.end, "rgba(255,255,0,0.5)");
+            arrows.forEach(a => drawArrow(a.start, a.end, a.style));
+            if (tempArrow) drawArrow(tempArrow.start, tempArrow.end, tempArrow.style, "rgba(255,255,0,0.5)");
 
             objects.forEach(obj => {
                 ctx.save();
@@ -1164,12 +1182,14 @@
                 dragTarget.x = pos.x;
                 dragTarget.y = pos.y;
             } else if (arrowStart) {
-                tempArrow = { start: arrowStart, end: pos };
+                tempArrow = { start: arrowStart, end: pos, style: currentArrowStyle };
             }
         }
 
         function handlePointerUp(e) {
-            if (tempArrow) arrows.push(tempArrow);
+            if (tempArrow) {
+                arrows.push({ ...tempArrow });
+            }
             isDragging = false;
             isRotating = false;
             dragTarget = null;
@@ -1274,6 +1294,26 @@
 
         document.getElementById('resetLayoutBtn').onclick = resetLayout;
         document.getElementById('resetArrowsBtn').onclick = resetArrows;
+
+        const arrowStyleSolidBtn = document.getElementById('arrowStyleSolid');
+        const arrowStyleDashedBtn = document.getElementById('arrowStyleDashed');
+
+        arrowStyleSolidBtn.onclick = () => {
+            currentArrowStyle = 'solid';
+            arrowStyleSolidBtn.classList.add('bg-blue-600', 'text-white');
+            arrowStyleSolidBtn.classList.remove('text-zinc-400');
+            arrowStyleDashedBtn.classList.remove('bg-blue-600', 'text-white');
+            arrowStyleDashedBtn.classList.add('text-zinc-400');
+        };
+
+        arrowStyleDashedBtn.onclick = () => {
+            currentArrowStyle = 'dashed';
+            arrowStyleDashedBtn.classList.add('bg-blue-600', 'text-white');
+            arrowStyleDashedBtn.classList.remove('text-zinc-400');
+            arrowStyleSolidBtn.classList.remove('bg-blue-600', 'text-white');
+            arrowStyleSolidBtn.classList.add('text-zinc-400');
+        };
+
         document.getElementById('resetToInitialScreenBtn').onclick = resetToInitialScreen;
         document.getElementById('saveBoardBtn').onclick = saveCurrentBoard;
         document.getElementById('prevBoardBtn').onclick = goToPrevBoard;
