@@ -94,6 +94,7 @@
     <div class="w-full md:w-96 bg-zinc-900 p-4 md:p-6 border-t md:border-t-0 md:border-l border-zinc-700 md:h-screen flex flex-col">
         <!-- タブナビゲーション -->
         <div class="flex gap-1 mb-4 bg-zinc-800 p-1 rounded-lg shrink-0">
+            <button id="tabBoardManager" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">ボード作成</button>
             <button id="tabRecording" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold active">録画</button>
             <button id="tabVoiceConvert" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">音声変換</button>
             <button id="tabResult" class="tab-btn flex-1 py-2 px-3 rounded text-sm font-semibold">結果</button>
@@ -101,6 +102,31 @@
 
         <!-- 録画タブ -->
         <div id="contentRecording" class="tab-content flex-grow gap-4 md:gap-6 overflow-y-auto pr-1 active">
+            <section class="mt-auto border-t border-zinc-700 pt-4 flex flex-col gap-2 shrink-0">
+                <div class="flex flex-col gap-2">
+                    <div class="bg-zinc-800 rounded p-3">
+                        <div class="flex items-center justify-between gap-3 mb-2">
+                            <div>
+                                <div class="text-xs font-semibold text-zinc-400">保存済みボード</div>
+                                <div id="boardPlaybackStatus" class="text-sm text-zinc-200">0件</div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button id="prevBoardBtn" disabled class="py-2 px-4 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">前のボード</button>
+                                <button id="nextBoardBtn" disabled class="py-2 px-4 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-semibold text-sm transition-colors">ボード送り</button>
+                            </div>
+                        </div>
+                        <div id="boardJumpButtons" class="flex flex-wrap gap-2 mb-2"></div>
+                        <div id="boardPlaybackHint" class="text-xs text-zinc-400">ボード作成タブで保存した順に切り替えます。</div>
+                    </div>
+                    <button id="resetToInitialScreenBtn" class="w-full py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm transition-colors">初期画面に戻る</button>
+                </div>
+                <button id="startRecBtn" disabled class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-bold transition-colors">録画開始</button>
+                <button id="stopRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録画停止</button>
+            </section>
+        </div>
+
+        <!-- ボード作成タブ -->
+        <div id="contentBoardManager" class="tab-content flex-grow gap-4 overflow-y-auto pr-1">
             <section>
                 <h2 class="text-sm font-semibold text-zinc-400 mb-2">操作説明</h2>
                 <ul class="text-xs space-y-1 text-zinc-300">
@@ -137,9 +163,26 @@
                 <button id="resetArrowsBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">矢印リセット</button>
             </section>
 
-            <section class="mt-auto border-t border-zinc-700 pt-4 flex flex-col gap-2 shrink-0">
-                <button id="startRecBtn" disabled class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed rounded font-bold transition-colors">録画開始</button>
-                <button id="stopRecBtn" class="w-full py-3 bg-white text-black rounded font-bold hidden">録画停止</button>
+            <section>
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">現在の盤面を保存</h2>
+                <div class="space-y-2">
+                    <input id="boardNameInput" type="text" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm" placeholder="例: 攻撃パターン 1">
+                    <div>
+                        <label for="boardTimestampInput" class="text-xs font-semibold text-zinc-400 mb-1 block">タイムスタンプ</label>
+                        <input id="boardTimestampInput" type="text" inputmode="decimal" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm" placeholder="00:00.00">
+                        <div class="text-xs text-zinc-500 mt-1">左側の動画の現在位置が自動で入ります。必要なら mm:ss.xx で編集できます。</div>
+                    </div>
+                    <button id="saveBoardBtn" class="w-full py-3 bg-amber-500 text-black hover:bg-amber-400 rounded font-bold transition-colors">このボードを保存</button>
+                    <div id="boardEditorStatus" class="text-xs text-zinc-400">配置した選手と矢印をそのまま保存します。</div>
+                </div>
+            </section>
+
+            <section>
+                <div class="flex items-center justify-between mb-2 gap-3">
+                    <h2 class="text-sm font-semibold text-zinc-400">保存済みボード</h2>
+                    <span id="boardCountLabel" class="text-xs text-zinc-500">0件</span>
+                </div>
+                <div id="boardList" class="space-y-2"></div>
             </section>
         </div>
 
@@ -162,7 +205,20 @@
                             <div class="text-xs text-zinc-400">音声認識 + 音声合成</div>
                         </div>
                     </label>
+                    <label class="flex items-center gap-3 bg-zinc-800 p-3 rounded cursor-pointer hover:bg-zinc-700">
+                        <input type="radio" name="convertMode" value="mode_tts" class="accent-blue-500">
+                        <div>
+                            <div class="font-semibold text-sm">TTS（テキスト読み上げ）</div>
+                            <div class="text-xs text-zinc-400">入力テキストから音声生成 (ElevenLabs)</div>
+                        </div>
+                    </label>
                 </div>
+            </section>
+
+            <section id="ttsTextSection" class="hidden">
+                <h2 class="text-sm font-semibold text-zinc-400 mb-2">読み上げテキスト</h2>
+                <textarea id="ttsTextInput" rows="4" maxlength="2000" placeholder="ここに読み上げるテキストを入力してください" class="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm resize-y"></textarea>
+                <div class="text-xs text-zinc-500 mt-1"><span id="ttsTextCount">0</span> / 2000 文字</div>
             </section>
 
             <section>
@@ -229,14 +285,28 @@
     </div>
 
     <script>
+        // ========== API ベースURL ==========
+        // Worker自身がこのHTMLを配信している場合は同一オリジン（相対パス）。
+        // それ以外（file://, localhost 等）はデプロイ済みWorkerを叩く。
+        const DEPLOYED_API = 'https://vamos-line.bvv-1.workers.dev';
+        const API_BASE = location.host.endsWith('workers.dev') ? '' : DEPLOYED_API;
+        // mode2/tts (ElevenLabs TTS) はデプロイ済みWorkerに未反映なのでローカルWorkerを叩く
+        // ローカル(127.0.0.1/localhost)から開いていれば同一オリジン、それ以外はlocalhostに直接
+        const LOCAL_API = (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+            ? ''
+            : 'http://127.0.0.1:8787';
+
         // ========== タブ管理 ==========
         const tabs = {
             recording: { btn: document.getElementById('tabRecording'), content: document.getElementById('contentRecording') },
+            boardManager: { btn: document.getElementById('tabBoardManager'), content: document.getElementById('contentBoardManager') },
             voiceConvert: { btn: document.getElementById('tabVoiceConvert'), content: document.getElementById('contentVoiceConvert') },
             result: { btn: document.getElementById('tabResult'), content: document.getElementById('contentResult') }
         };
+        let activeTabName = 'recording';
 
         function switchTab(tabName) {
+            activeTabName = tabName;
             Object.entries(tabs).forEach(([name, { btn, content }]) => {
                 btn.classList.toggle('active', name === tabName);
                 content.classList.toggle('active', name === tabName);
@@ -245,6 +315,10 @@
             // タブ切り替え時にボイス一覧が空ならロードを試みる
             if (tabName === 'voiceConvert' && availableVoices.length === 0) {
                 loadVoices();
+            }
+
+            if (tabName === 'boardManager') {
+                renderBoardList();
             }
         }
 
@@ -273,6 +347,439 @@
         const PITCH_TOP = 1920 / 2;
         const PITCH_HEIGHT = 1920 / 2;
         const CANVAS_WIDTH = 1080;
+        const BOARD_STORAGE_KEY = 'vamos.savedBoards.v1';
+
+        let savedBoards = [];
+        let activeBoardIndex = -1;
+        const boardTimestampDrafts = {};
+
+        function formatTimestampInput(sec) {
+            const safeSec = Number.isFinite(sec) && sec >= 0 ? sec : 0;
+            const minutes = Math.floor(safeSec / 60).toString().padStart(2, '0');
+            const seconds = (safeSec % 60).toFixed(2).padStart(5, '0');
+            return `${minutes}:${seconds}`;
+        }
+
+        function parseTimestampInput(value) {
+            const normalized = value.trim();
+            if (!normalized) {
+                return Number.isFinite(video.currentTime) ? video.currentTime : 0;
+            }
+
+            if (/^\d+(\.\d+)?$/.test(normalized)) {
+                return Number(normalized);
+            }
+
+            const parts = normalized.split(':');
+            if (parts.length === 2) {
+                const minutes = Number(parts[0]);
+                const seconds = Number(parts[1]);
+                if (Number.isFinite(minutes) && Number.isFinite(seconds) && seconds >= 0 && seconds < 60) {
+                    return (minutes * 60) + seconds;
+                }
+            }
+
+            return null;
+        }
+
+        function getClampedVideoTime(sec) {
+            const safeSec = Number.isFinite(sec) && sec >= 0 ? sec : 0;
+            if (Number.isFinite(video.duration) && video.duration > 0) {
+                return Math.min(safeSec, video.duration);
+            }
+
+            return safeSec;
+        }
+
+        function syncBoardTimestampInput(sec = video.currentTime) {
+            const input = document.getElementById('boardTimestampInput');
+            if (document.activeElement === input) {
+                return;
+            }
+
+            input.value = formatTimestampInput(getClampedVideoTime(sec));
+        }
+
+        function cloneObjectsState(items) {
+            return items.map((item) => ({ ...item }));
+        }
+
+        function cloneArrowsState(items) {
+            return items.map((arrow) => ({
+                start: { ...arrow.start },
+                end: { ...arrow.end }
+            }));
+        }
+
+        function buildBoardName() {
+            return `ボード ${savedBoards.length + 1}`;
+        }
+
+        function setBoardEditorStatus(message, isError = false) {
+            const status = document.getElementById('boardEditorStatus');
+            status.textContent = message;
+            status.classList.toggle('text-red-400', isError);
+            status.classList.toggle('text-zinc-400', !isError);
+        }
+
+        function renderBoardJumpButtons() {
+            const container = document.getElementById('boardJumpButtons');
+            container.innerHTML = '';
+
+            savedBoards.forEach((board, index) => {
+                const button = document.createElement('button');
+                const isActive = index === activeBoardIndex;
+                button.type = 'button';
+                button.textContent = String(index + 1);
+                button.title = `${index + 1}: ${board.name}`;
+                button.className = isActive
+                    ? 'min-w-10 h-10 px-3 rounded bg-blue-600 text-white font-semibold text-sm transition-colors'
+                    : 'min-w-10 h-10 px-3 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-semibold text-sm transition-colors';
+                button.onclick = () => loadBoard(index);
+                container.appendChild(button);
+            });
+        }
+
+        function isTypingTarget(target) {
+            if (!(target instanceof HTMLElement)) {
+                return false;
+            }
+
+            if (target.isContentEditable) {
+                return true;
+            }
+
+            return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+        }
+
+        function handleRecordingKeyboardShortcut(event) {
+            if (activeTabName !== 'recording') {
+                return;
+            }
+
+            if (event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) {
+                return;
+            }
+
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                const prevBoardBtn = document.getElementById('prevBoardBtn');
+                if (!prevBoardBtn.disabled) {
+                    prevBoardBtn.click();
+                }
+                return;
+            }
+
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                const nextBoardBtn = document.getElementById('nextBoardBtn');
+                if (!nextBoardBtn.disabled) {
+                    nextBoardBtn.click();
+                }
+                return;
+            }
+
+            if (event.key === ' ') {
+                event.preventDefault();
+                document.getElementById('resetToInitialScreenBtn').click();
+                return;
+            }
+
+            if (/^[1-9]$/.test(event.key)) {
+                const boardIndex = Number.parseInt(event.key, 10) - 1;
+                if (boardIndex < savedBoards.length) {
+                    event.preventDefault();
+                    loadBoard(boardIndex);
+                }
+            }
+        }
+
+        function updateBoardPlaybackUI() {
+            const prevBoardBtn = document.getElementById('prevBoardBtn');
+            const nextBoardBtn = document.getElementById('nextBoardBtn');
+            const status = document.getElementById('boardPlaybackStatus');
+            const hint = document.getElementById('boardPlaybackHint');
+
+            if (savedBoards.length === 0) {
+                prevBoardBtn.disabled = true;
+                nextBoardBtn.disabled = true;
+                renderBoardJumpButtons();
+                status.textContent = '0件';
+                hint.textContent = 'ボード作成タブで保存すると、ここから順番に切り替えられます。';
+                return;
+            }
+
+            const hasPrevBoard = activeBoardIndex > 0;
+            const hasNextBoard = activeBoardIndex + 1 < savedBoards.length;
+            prevBoardBtn.disabled = !hasPrevBoard;
+            nextBoardBtn.disabled = !hasNextBoard;
+            renderBoardJumpButtons();
+
+            if (activeBoardIndex >= 0 && activeBoardIndex < savedBoards.length) {
+                status.textContent = `現在: ${savedBoards[activeBoardIndex].name}`;
+            } else {
+                status.textContent = `未呼び出し (${savedBoards.length}件)`;
+            }
+
+            if (hasNextBoard) {
+                const nextBoard = savedBoards[activeBoardIndex + 1];
+                hint.textContent = `次に表示: ${nextBoard.name} (${activeBoardIndex + 2}/${savedBoards.length})`;
+            } else if (hasPrevBoard) {
+                const prevBoard = savedBoards[activeBoardIndex - 1];
+                hint.textContent = `前に戻る: ${prevBoard.name} (${activeBoardIndex}/${savedBoards.length})`;
+            } else {
+                hint.textContent = `最後のボードまで表示済みです (${savedBoards.length}/${savedBoards.length})。`;
+            }
+        }
+
+        function persistBoards() {
+            try {
+                localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(savedBoards));
+            } catch (error) {
+                console.warn('Failed to persist boards:', error);
+                setBoardEditorStatus('ボード保存に失敗しました。ブラウザの保存領域を確認してください。', true);
+            }
+        }
+
+        function createBoardId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+
+            return `board_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        }
+
+        function createBoardSnapshot(name, timestampSec) {
+            return {
+                id: createBoardId(),
+                name,
+                timestampSec: getClampedVideoTime(timestampSec),
+                objects: cloneObjectsState(objects),
+                arrows: cloneArrowsState(arrows),
+                createdAt: Date.now()
+            };
+        }
+
+        function applyBoardSnapshot(board, index = -1) {
+            objects = cloneObjectsState(board.objects || []);
+            arrows = cloneArrowsState(board.arrows || []);
+            activeBoardIndex = index;
+            if (Number.isFinite(board.timestampSec)) {
+                const nextTime = getClampedVideoTime(board.timestampSec);
+                if (isVideoLoaded) {
+                    video.currentTime = nextTime;
+                }
+                syncBoardTimestampInput(nextTime);
+            }
+            updatePlayerUI();
+            updateBoardPlaybackUI();
+        }
+
+        function loadBoardsFromStorage() {
+            try {
+                const raw = localStorage.getItem(BOARD_STORAGE_KEY);
+                if (!raw) {
+                    savedBoards = [];
+                    return;
+                }
+
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed)) {
+                    savedBoards = [];
+                    return;
+                }
+
+                savedBoards = parsed
+                    .filter((board) => board && Array.isArray(board.objects) && Array.isArray(board.arrows))
+                    .map((board, index) => ({
+                        id: typeof board.id === 'string' ? board.id : createBoardId(),
+                        name: typeof board.name === 'string' && board.name.trim() ? board.name.trim() : `ボード ${index + 1}`,
+                        timestampSec: Number.isFinite(board.timestampSec) ? getClampedVideoTime(board.timestampSec) : 0,
+                        objects: cloneObjectsState(board.objects),
+                        arrows: cloneArrowsState(board.arrows),
+                        createdAt: typeof board.createdAt === 'number' ? board.createdAt : Date.now()
+                    }));
+            } catch (error) {
+                console.warn('Failed to restore boards:', error);
+                savedBoards = [];
+                setBoardEditorStatus('保存済みボードの読み込みに失敗しました。', true);
+            }
+        }
+
+        function renderBoardList() {
+            const boardList = document.getElementById('boardList');
+            const boardCountLabel = document.getElementById('boardCountLabel');
+            boardCountLabel.textContent = `${savedBoards.length}件`;
+
+            if (savedBoards.length === 0) {
+                boardList.innerHTML = '<div class="bg-zinc-800 border border-dashed border-zinc-700 rounded p-4 text-sm text-zinc-400">まだボードがありません。録画タブで盤面を作って保存してください。</div>';
+                updateBoardPlaybackUI();
+                return;
+            }
+
+            boardList.innerHTML = savedBoards.map((board, index) => {
+                const isActive = index === activeBoardIndex;
+                const timestampDraft = boardTimestampDrafts[board.id] ?? formatTimestampInput(board.timestampSec);
+                return `
+                    <div data-action="load" data-index="${index}" class="bg-zinc-800 border ${isActive ? 'border-amber-400' : 'border-zinc-700'} rounded p-3 cursor-pointer transition-colors hover:border-amber-300">
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                                <div class="font-semibold text-sm">${index + 1}. ${board.name}</div>
+                                <div class="text-xs text-zinc-400">選手 ${board.objects.filter((item) => item.type === 'player').length} / 矢印 ${board.arrows.length} / ${formatTimestampInput(board.timestampSec)}</div>
+                            </div>
+                            <div class="text-[10px] uppercase tracking-wide ${isActive ? 'text-amber-300' : 'text-zinc-500'}">${isActive ? 'current' : 'saved'}</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="boardCardTimestamp_${index}" class="text-xs font-semibold text-zinc-400 mb-1 block">タイムスタンプ</label>
+                            <div class="flex gap-2">
+                                <input id="boardCardTimestamp_${index}" data-role="board-timestamp-input" data-index="${index}" data-board-id="${board.id}" type="text" inputmode="decimal" value="${timestampDraft}" class="flex-1 bg-zinc-900 border border-zinc-700 rounded p-2 text-sm" placeholder="00:00.00">
+                                <button data-action="save-timestamp" data-index="${index}" class="py-2 px-3 bg-sky-600 hover:bg-sky-700 rounded text-sm font-semibold transition-colors">保存</button>
+                            </div>
+                            <div class="text-xs text-zinc-500 mt-1">入力中の値は動画へ即時反映されます。</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button data-action="rename" data-index="${index}" class="py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition-colors">名前変更</button>
+                            <button data-action="delete" data-index="${index}" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm font-semibold transition-colors">削除</button>
+                            <button data-action="up" data-index="${index}" ${index === 0 ? 'disabled' : ''} class="py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:cursor-not-allowed rounded text-sm font-semibold transition-colors">上へ</button>
+                            <button data-action="down" data-index="${index}" ${index === savedBoards.length - 1 ? 'disabled' : ''} class="py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:cursor-not-allowed rounded text-sm font-semibold transition-colors">下へ</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            updateBoardPlaybackUI();
+        }
+
+        function saveCurrentBoard() {
+            const input = document.getElementById('boardNameInput');
+            const name = input.value.trim() || buildBoardName();
+            const timestampSec = parseTimestampInput(document.getElementById('boardTimestampInput').value);
+            if (timestampSec === null) {
+                setBoardEditorStatus('タイムスタンプは mm:ss.xx または秒数で入力してください。', true);
+                return;
+            }
+
+            savedBoards.push(createBoardSnapshot(name, timestampSec));
+            persistBoards();
+            input.value = buildBoardName();
+            setBoardEditorStatus(`「${name}」を保存しました。`);
+            renderBoardList();
+        }
+
+        function moveBoard(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= savedBoards.length) {
+                return;
+            }
+
+            const temp = savedBoards[index];
+            savedBoards[index] = savedBoards[targetIndex];
+            savedBoards[targetIndex] = temp;
+
+            if (activeBoardIndex === index) {
+                activeBoardIndex = targetIndex;
+            } else if (activeBoardIndex === targetIndex) {
+                activeBoardIndex = index;
+            }
+
+            persistBoards();
+            renderBoardList();
+            setBoardEditorStatus('ボードの順番を変更しました。');
+        }
+
+        function deleteBoard(index) {
+            const [removedBoard] = savedBoards.splice(index, 1);
+            if (!removedBoard) {
+                return;
+            }
+
+            delete boardTimestampDrafts[removedBoard.id];
+
+            if (activeBoardIndex === index) {
+                activeBoardIndex = -1;
+            } else if (activeBoardIndex > index) {
+                activeBoardIndex -= 1;
+            }
+
+            persistBoards();
+            renderBoardList();
+            setBoardEditorStatus(`「${removedBoard.name}」を削除しました。`);
+        }
+
+        function renameBoard(index) {
+            const board = savedBoards[index];
+            if (!board) {
+                return;
+            }
+
+            const nextName = window.prompt('新しいボード名を入力してください。', board.name);
+            if (nextName === null) {
+                return;
+            }
+
+            const trimmedName = nextName.trim();
+            if (!trimmedName) {
+                setBoardEditorStatus('ボード名を空にはできません。', true);
+                return;
+            }
+
+            board.name = trimmedName;
+            persistBoards();
+            renderBoardList();
+            setBoardEditorStatus(`ボード名を「${trimmedName}」に変更しました。`);
+        }
+
+        function retimeBoard(index) {
+            const board = savedBoards[index];
+            if (!board) {
+                return;
+            }
+
+            const input = document.querySelector(`[data-role="board-timestamp-input"][data-index="${index}"]`);
+            const nextTimestamp = input ? input.value : (boardTimestampDrafts[board.id] ?? formatTimestampInput(board.timestampSec));
+            const parsedTimestamp = parseTimestampInput(nextTimestamp);
+            if (parsedTimestamp === null) {
+                setBoardEditorStatus('タイムスタンプは mm:ss.xx または秒数で入力してください。', true);
+                return;
+            }
+
+            board.timestampSec = getClampedVideoTime(parsedTimestamp);
+            boardTimestampDrafts[board.id] = formatTimestampInput(board.timestampSec);
+            persistBoards();
+            renderBoardList();
+            setBoardEditorStatus(`タイムスタンプを ${formatTimestampInput(board.timestampSec)} に変更しました。`);
+        }
+
+        function loadBoard(index) {
+            const board = savedBoards[index];
+            if (!board) {
+                return;
+            }
+
+            applyBoardSnapshot(board, index);
+            renderBoardList();
+            setBoardEditorStatus(`「${board.name}」を呼び出しました。`);
+        }
+
+        function goToNextBoard() {
+            const nextIndex = activeBoardIndex + 1;
+            if (nextIndex >= savedBoards.length) {
+                updateBoardPlaybackUI();
+                return;
+            }
+
+            applyBoardSnapshot(savedBoards[nextIndex], nextIndex);
+        }
+
+        function goToPrevBoard() {
+            const prevIndex = activeBoardIndex - 1;
+            if (prevIndex < 0) {
+                updateBoardPlaybackUI();
+                return;
+            }
+
+            applyBoardSnapshot(savedBoards[prevIndex], prevIndex);
+        }
 
         function updatePlayerUI() {
             const redPlayers = objects.filter(o => o.team === 'red').length;
@@ -285,6 +792,47 @@
             document.getElementById('redIncBtn').disabled = redPlayers >= 11;
             document.getElementById('blueDecBtn').disabled = bluePlayers <= 0;
             document.getElementById('blueIncBtn').disabled = bluePlayers >= 11;
+        }
+
+        function buildInitialLayoutWithCounts(redCount = 2, blueCount = 2) {
+            const nextObjects = [
+                { id: 'ball', x: 540, y: PITCH_TOP + 480, r: 25, color: '#fff', type: 'ball' }
+            ];
+
+            const createPlayers = (team, count, x, color) => {
+                if (count <= 0) {
+                    return;
+                }
+
+                const spacing = PITCH_HEIGHT / (count + 1);
+                for (let index = 0; index < count; index += 1) {
+                    nextObjects.push({
+                        x,
+                        y: PITCH_TOP + (spacing * (index + 1)),
+                        r: 35,
+                        color,
+                        type: 'player',
+                        team
+                    });
+                }
+            };
+
+            createPlayers('red', redCount, 300, '#ef4444');
+            createPlayers('blue', blueCount, 780, '#3b82f6');
+
+            return nextObjects;
+        }
+
+        function getInitialBoardCounts() {
+            const firstBoard = savedBoards[0];
+            if (!firstBoard || !Array.isArray(firstBoard.objects)) {
+                return { redCount: 2, blueCount: 2 };
+            }
+
+            return {
+                redCount: firstBoard.objects.filter((item) => item.team === 'red').length,
+                blueCount: firstBoard.objects.filter((item) => item.team === 'blue').length,
+            };
         }
 
         function resetLayout() {
@@ -300,6 +848,22 @@
 
         function resetArrows() { arrows = []; }
         function initObjects() { resetLayout(); resetArrows(); }
+
+        function resetToInitialScreen() {
+            const { redCount, blueCount } = getInitialBoardCounts();
+            objects = buildInitialLayoutWithCounts(redCount, blueCount);
+            resetArrows();
+            activeBoardIndex = -1;
+
+            if (isVideoLoaded) {
+                video.currentTime = 0;
+            }
+
+            syncBoardTimestampInput(0);
+            updatePlayerUI();
+            updateBoardPlaybackUI();
+            renderBoardList();
+        }
 
         window.changePlayerCount = (team, delta) => {
             const count = objects.filter(o => o.team === team).length;
@@ -528,6 +1092,7 @@
                 video.onloadedmetadata = () => {
                     isVideoLoaded = true;
                     document.getElementById('startRecBtn').disabled = false;
+                    syncBoardTimestampInput(video.currentTime);
                     video.play();
                 };
             }
@@ -558,8 +1123,16 @@
             if (!video.duration) return;
             seekBar.value = (video.currentTime / video.duration) * 100;
             timeDisplay.innerText = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+            syncBoardTimestampInput(video.currentTime);
         };
-        seekBar.oninput = () => { if (video.duration) video.currentTime = (seekBar.value / 100) * video.duration; };
+        seekBar.oninput = () => {
+            if (!video.duration) {
+                return;
+            }
+
+            video.currentTime = (seekBar.value / 100) * video.duration;
+            syncBoardTimestampInput(video.currentTime);
+        };
 
         function formatTime(sec) {
             const m = Math.floor(sec / 60).toString().padStart(2, '0');
@@ -569,6 +1142,124 @@
 
         document.getElementById('resetLayoutBtn').onclick = resetLayout;
         document.getElementById('resetArrowsBtn').onclick = resetArrows;
+        document.getElementById('resetToInitialScreenBtn').onclick = resetToInitialScreen;
+        document.getElementById('saveBoardBtn').onclick = saveCurrentBoard;
+        document.getElementById('prevBoardBtn').onclick = goToPrevBoard;
+        document.getElementById('nextBoardBtn').onclick = goToNextBoard;
+        document.addEventListener('keydown', handleRecordingKeyboardShortcut);
+        document.getElementById('boardTimestampInput').addEventListener('blur', (event) => {
+            const parsed = parseTimestampInput(event.target.value);
+            if (parsed === null) {
+                setBoardEditorStatus('タイムスタンプは mm:ss.xx または秒数で入力してください。', true);
+                syncBoardTimestampInput(video.currentTime);
+                return;
+            }
+
+            event.target.value = formatTimestampInput(getClampedVideoTime(parsed));
+        });
+
+        document.getElementById('boardList').addEventListener('input', (event) => {
+            const input = event.target.closest('[data-role="board-timestamp-input"]');
+            if (!input) {
+                return;
+            }
+
+            const index = Number(input.dataset.index);
+            const boardId = input.dataset.boardId;
+            if (Number.isNaN(index)) {
+                return;
+            }
+
+            boardTimestampDrafts[boardId] = input.value;
+            const parsed = parseTimestampInput(input.value);
+            if (parsed === null) {
+                return;
+            }
+
+            const nextTime = getClampedVideoTime(parsed);
+            if (isVideoLoaded) {
+                video.currentTime = nextTime;
+            }
+            syncBoardTimestampInput(nextTime);
+        });
+
+        document.getElementById('boardList').addEventListener('blur', (event) => {
+            const input = event.target.closest('[data-role="board-timestamp-input"]');
+            if (!input) {
+                return;
+            }
+
+            const index = Number(input.dataset.index);
+            const boardId = input.dataset.boardId;
+            if (Number.isNaN(index)) {
+                return;
+            }
+
+            const parsed = parseTimestampInput(input.value);
+            if (parsed === null) {
+                input.value = boardTimestampDrafts[boardId] ?? formatTimestampInput(savedBoards[index]?.timestampSec ?? 0);
+                setBoardEditorStatus('タイムスタンプは mm:ss.xx または秒数で入力してください。', true);
+                return;
+            }
+
+            const normalized = formatTimestampInput(getClampedVideoTime(parsed));
+            boardTimestampDrafts[boardId] = normalized;
+            input.value = normalized;
+        }, true);
+
+        document.getElementById('boardList').onclick = (event) => {
+            const button = event.target.closest('button[data-action]');
+            if (button) {
+                const index = Number(button.dataset.index);
+                const action = button.dataset.action;
+
+                if (Number.isNaN(index)) {
+                    return;
+                }
+
+                if (action === 'rename') {
+                    renameBoard(index);
+                    return;
+                }
+
+                if (action === 'save-timestamp') {
+                    retimeBoard(index);
+                    return;
+                }
+
+                if (action === 'delete') {
+                    deleteBoard(index);
+                    return;
+                }
+
+                if (action === 'up') {
+                    moveBoard(index, -1);
+                    return;
+                }
+
+                if (action === 'down') {
+                    moveBoard(index, 1);
+                }
+                return;
+            }
+
+            if (event.target.closest('[data-role="board-timestamp-input"]')) {
+                return;
+            }
+
+            const card = event.target.closest('[data-action="load"]');
+            if (!card) {
+                return;
+            }
+
+            const index = Number(card.dataset.index);
+
+            if (Number.isNaN(index)) {
+                return;
+            }
+
+            loadBoard(index);
+        };
 
         // ========== 録画機能 ==========
         const startRecBtn = document.getElementById('startRecBtn');
@@ -605,7 +1296,7 @@
                 audioRecorder.ondataavailable = (e) => audioChunks.push(e.data);
                 audioRecorder.onstop = () => {
                     recordedAudioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    document.getElementById('startConvertBtn').disabled = false;
+                    updateConvertBtnState();
                 };
                 audioRecorder.start();
                 window._audioRecorder = audioRecorder;
@@ -618,6 +1309,7 @@
             mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
             mediaRecorder.onstop = () => {
                 recordedVideoBlob = new Blob(recordedChunks, { type: mimeType });
+                updateConvertBtnState();
                 // 音声変換タブに遷移
                 switchTab('voiceConvert');
                 loadVoices();
@@ -641,6 +1333,22 @@
         let availableVoices = [];
         let convertedVideoBlob = null;
 
+        async function ensureElevenLabsVoicesLoaded() {
+            if (availableVoices.length > 0) {
+                return availableVoices;
+            }
+
+            const res = await fetch(`${API_BASE}/api/voice-convert/voices`);
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+            }
+
+            const data = await res.json();
+            availableVoices = data.voices || [];
+            return availableVoices;
+        }
+
         async function loadVoices() {
             const voiceSelect = document.getElementById('voiceSelect');
             const mode = document.querySelector('input[name="convertMode"]:checked').value;
@@ -649,8 +1357,9 @@
             voiceSelect.disabled = true;
 
             try {
+                // mode_tts と mode1 はどちらも ElevenLabs ボイスを使う
                 if (mode === 'mode2') {
-                    const res = await fetch('/api/voice-convert/voices-chirp');
+                    const res = await fetch(`${API_BASE}/api/voice-convert/voices-chirp`);
                     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                     const data = await res.json();
                     const chirpVoices = data.voices || [];
@@ -672,31 +1381,57 @@
                 voiceSelect.disabled = false;
                 document.getElementById('previewVoiceBtn').classList.remove('hidden');
 
-                const res = await fetch('/api/voice-convert/voices');
-                if (!res.ok) {
-                    const errorData = await res.json().catch(() => ({}));
-                    throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
-                }
-                const data = await res.json();
-                availableVoices = data.voices || [];
+                await ensureElevenLabsVoicesLoaded();
                 
                 if (availableVoices.length === 0) {
                     voiceSelect.innerHTML = '<option value="">利用可能なボイスがありません</option>';
                     return;
                 }
 
+                const selectedValue = availableVoices.some((voice) => voice.voice_id === voiceSelect.value)
+                    ? voiceSelect.value
+                    : undefined;
                 voiceSelect.innerHTML = availableVoices.map(v =>
                     `<option value="${v.voice_id}">${v.name}</option>`
                 ).join('');
+                voiceSelect.value = selectedValue || availableVoices[0].voice_id;
             } catch (e) {
                 voiceSelect.innerHTML = `<option value="">エラー: ${e.message}</option>`;
                 console.error('Failed to load voices:', e);
             }
         }
 
+        // TTSテキストUIの表示切替
+        function updateTTSUIVisibility() {
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+            const ttsSection = document.getElementById('ttsTextSection');
+            if (mode === 'mode_tts') {
+                ttsSection.classList.remove('hidden');
+            } else {
+                ttsSection.classList.add('hidden');
+            }
+        }
+
+        // 変換開始ボタンの有効化条件: mode_tts は動画のみ必要、それ以外は音声必要
+        function updateConvertBtnState() {
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+            const btn = document.getElementById('startConvertBtn');
+            if (mode === 'mode_tts') {
+                btn.disabled = !recordedVideoBlob;
+            } else {
+                btn.disabled = !recordedAudioBlob;
+            }
+        }
+
+        document.getElementById('ttsTextInput').addEventListener('input', (e) => {
+            document.getElementById('ttsTextCount').textContent = e.target.value.length;
+        });
+
         // モード切替時の処理
         document.querySelectorAll('input[name="convertMode"]').forEach(radio => {
             radio.addEventListener('change', () => {
+                updateTTSUIVisibility();
+                updateConvertBtnState();
                 loadVoices();
             });
         });
@@ -747,9 +1482,42 @@
             getModeLabel(mode) {
                 const labels = {
                     'mode1': 'Voice Changer',
-                    'mode2_chirp': 'STT-TTS (Chirp 3)'
+                    'mode2_chirp': 'STT-TTS (Chirp 3)',
+                    'mode_tts': 'TTS (テキスト読み上げ)'
                 };
                 return labels[mode] || mode;
+            }
+
+            async executeTTS(text, voiceId, targetDurationMs) {
+                this.currentMode = 'mode_tts';
+                this.updateProgress(20, 'ElevenLabs TTS で音声生成中...');
+
+                const body = { text, voice_id: voiceId };
+                if (targetDurationMs) {
+                    body.target_duration_ms = targetDurationMs;
+                }
+
+                const res = await fetch(`${API_BASE}/api/voice-convert/mode2/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || `TTS failed: ${res.status}`);
+                }
+
+                const data = await res.json();
+                this.updateProgress(80, '音声データ処理中...');
+
+                // base64 -> ArrayBuffer
+                const binary = atob(data.audio_base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return bytes.buffer;
             }
 
             async executeMode(mode, audioBlob, voiceId) {
@@ -766,7 +1534,7 @@
                 formData.append('audio', audioBlob);
                 formData.append('voice_id', voiceId);
 
-                const res = await fetch('/api/voice-convert/mode1', {
+                const res = await fetch(`${API_BASE}/api/voice-convert/mode1`, {
                     method: 'POST',
                     body: formData
                 });
@@ -783,7 +1551,7 @@
                 sttFormData.append('audio', audioBlob);
                 sttFormData.append('language', 'ja-JP');
 
-                const sttRes = await fetch('/api/voice-convert/mode2/stt', {
+                const sttRes = await fetch(`${API_BASE}/api/voice-convert/mode2/stt`, {
                     method: 'POST',
                     body: sttFormData
                 });
@@ -804,7 +1572,7 @@
                     const progress = 50 + (40 * (i + 1) / segments.length);
                     this.updateProgress(progress, `音声合成中... (${i + 1}/${segments.length})`);
 
-                    const ttsRes = await fetch('/api/voice-convert/mode2/tts-chirp', {
+                    const ttsRes = await fetch(`${API_BASE}/api/voice-convert/mode2/tts-chirp`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -953,18 +1721,63 @@
         const audioManager = new AudioProcessingManager();
 
         document.getElementById('startConvertBtn').onclick = async () => {
-            if (!recordedAudioBlob) {
-                showError('音声データがありません。録画時にマイクを許可してください。');
-                return;
-            }
-
+            const mode = document.querySelector('input[name="convertMode"]:checked').value;
             const voiceId = document.getElementById('voiceSelect').value;
             if (!voiceId) {
                 showError('ボイスを選択してください。');
                 return;
             }
 
-            const mode = document.querySelector('input[name="convertMode"]:checked').value;
+            // TTS モード: 録画音声不要、テキスト入力必須
+            if (mode === 'mode_tts') {
+                if (!recordedVideoBlob) {
+                    showError('動画データがありません。先に録画を行ってください。');
+                    return;
+                }
+                const text = document.getElementById('ttsTextInput').value.trim();
+                if (!text) {
+                    showError('読み上げるテキストを入力してください。');
+                    return;
+                }
+
+                document.getElementById('progressSection').classList.remove('hidden');
+                document.getElementById('startConvertBtn').disabled = true;
+
+                try {
+                    // 動画の長さに合わせる（任意のヒントとして渡す）
+                    let targetDurationMs;
+                    if (recordedVideoBlob) {
+                        const tmpVideo = document.createElement('video');
+                        tmpVideo.src = URL.createObjectURL(recordedVideoBlob);
+                        await new Promise((resolve) => {
+                            tmpVideo.onloadedmetadata = resolve;
+                            tmpVideo.onerror = resolve;
+                        });
+                        if (isFinite(tmpVideo.duration) && tmpVideo.duration > 0) {
+                            targetDurationMs = Math.round(tmpVideo.duration * 1000);
+                        }
+                        URL.revokeObjectURL(tmpVideo.src);
+                    }
+
+                    const audioBuffer = await audioManager.executeTTS(text, voiceId, targetDurationMs);
+                    audioManager.updateProgress(100, '変換完了!');
+                    await createConvertedVideo(audioBuffer);
+                    switchTab('result');
+                    showResult('mode_tts', false);
+                } catch (e) {
+                    showError(`TTS変換中にエラーが発生しました: ${e.message}`);
+                    switchTab('result');
+                }
+
+                document.getElementById('progressSection').classList.add('hidden');
+                document.getElementById('startConvertBtn').disabled = false;
+                return;
+            }
+
+            if (!recordedAudioBlob) {
+                showError('音声データがありません。録画時にマイクを許可してください。');
+                return;
+            }
 
             document.getElementById('progressSection').classList.remove('hidden');
             document.getElementById('startConvertBtn').disabled = true;
@@ -1124,11 +1937,16 @@
             recordedAudioBlob = null;
             convertedVideoBlob = null;
             document.getElementById('startConvertBtn').disabled = true;
+            activeBoardIndex = -1;
+            updateBoardPlaybackUI();
             switchTab('recording');
         };
 
         // 初期化
         initObjects();
+        loadBoardsFromStorage();
+        document.getElementById('boardNameInput').value = buildBoardName();
+        renderBoardList();
         render();
         loadVoices();
     </script>

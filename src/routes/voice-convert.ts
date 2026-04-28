@@ -50,6 +50,11 @@ export async function handleVoiceConvert(
 			return await handleMode2TTSChirp(request, env, corsHeaders);
 		}
 
+		// POST /api/voice-convert/mode2/tts - ElevenLabs TTS
+		if (path === "/api/voice-convert/mode2/tts" && request.method === "POST") {
+			return await handleMode2TTS(request, env, corsHeaders);
+		}
+
 		return new Response("Not Found", { status: 404, headers: corsHeaders });
 	} catch (error) {
 		console.error("Voice convert error:", error);
@@ -180,6 +185,49 @@ async function handleMode2STT(
 	return new Response(JSON.stringify(result), {
 		headers: { ...corsHeaders, "Content-Type": "application/json" },
 	});
+}
+
+/**
+ * POST /api/voice-convert/mode2/tts
+ * ElevenLabs Text-to-Speech
+ */
+async function handleMode2TTS(
+	request: Request,
+	env: Env,
+	corsHeaders: Record<string, string>
+): Promise<Response> {
+	const body = (await request.json()) as {
+		text: string;
+		voice_id: string;
+		target_duration_ms?: number;
+	};
+
+	if (!body.text || !body.voice_id) {
+		return new Response(
+			JSON.stringify({ error: "text and voice_id are required" }),
+			{
+				status: 400,
+				headers: { ...corsHeaders, "Content-Type": "application/json" },
+			}
+		);
+	}
+
+	const elevenlabs = new ElevenLabsClient(env.ELEVENLABS_API_KEY);
+	const result = await elevenlabs.textToSpeech(
+		body.text,
+		body.voice_id,
+		body.target_duration_ms
+	);
+
+	return new Response(
+		JSON.stringify({
+			audio_base64: result.audioBase64,
+			actual_duration_ms: result.actualDurationMs,
+		}),
+		{
+			headers: { ...corsHeaders, "Content-Type": "application/json" },
+		}
+	);
 }
 
 /**
