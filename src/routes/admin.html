@@ -81,6 +81,15 @@
         <canvas id="mainCanvas" width="1080" height="1920"></canvas>
         <input type="file" id="videoFileInput" accept="video/*" class="hidden">
 
+        <!-- Rotation Slider (Overlay for Mobile) -->
+        <div id="rotationOverlay" class="absolute bottom-4 left-1/2 -translate-x-1/2 w-[80%] max-w-[400px] bg-black/80 p-4 rounded-xl border border-zinc-700 backdrop-blur-md hidden flex-col gap-2">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-bold text-zinc-400">向きの調整</span>
+                <button id="closeRotationBtn" class="text-zinc-400 hover:text-white">✕</button>
+            </div>
+            <input type="range" id="rotationSlider" min="0" max="360" class="w-full h-4 bg-zinc-600 rounded-lg appearance-none cursor-pointer">
+        </div>
+
         <!-- Video Controls (Top) -->
         <div id="videoControls" class="absolute top-4 left-1/2 -translate-x-1/2 w-full max-w-[500px] bg-black/80 p-4 rounded-lg flex flex-col gap-2 border border-zinc-700 backdrop-blur-sm">
             <div class="flex items-center gap-4">
@@ -354,7 +363,9 @@
         let objects = [];
         let arrows = [];
         let isDragging = false;
+        let isRotating = false;
         let dragTarget = null;
+        let selectedObject = null;
         let arrowStart = null;
         let tempArrow = null;
         let isVideoLoaded = false;
@@ -832,7 +843,8 @@
                         r: 35,
                         color,
                         type: 'player',
-                        team
+                        team,
+                        angle: team === 'red' ? 0 : Math.PI
                     });
                 }
             };
@@ -858,10 +870,10 @@
         function resetLayout() {
             objects = [
                 { id: 'ball', x: 540, y: PITCH_TOP + 480, r: 25, color: '#fff', type: 'ball' },
-                { x: 300, y: PITCH_TOP + 350, r: 35, color: '#ef4444', type: 'player', team: 'red' },
-                { x: 300, y: PITCH_TOP + 610, r: 35, color: '#ef4444', type: 'player', team: 'red' },
-                { x: 780, y: PITCH_TOP + 350, r: 35, color: '#3b82f6', type: 'player', team: 'blue' },
-                { x: 780, y: PITCH_TOP + 610, r: 35, color: '#3b82f6', type: 'player', team: 'blue' },
+                { x: 300, y: PITCH_TOP + 350, r: 35, color: '#ef4444', type: 'player', team: 'red', angle: 0 },
+                { x: 300, y: PITCH_TOP + 610, r: 35, color: '#ef4444', type: 'player', team: 'red', angle: 0 },
+                { x: 780, y: PITCH_TOP + 350, r: 35, color: '#3b82f6', type: 'player', team: 'blue', angle: Math.PI },
+                { x: 780, y: PITCH_TOP + 610, r: 35, color: '#3b82f6', type: 'player', team: 'blue', angle: Math.PI },
             ];
             updatePlayerUI();
         }
@@ -893,7 +905,8 @@
                     x: team === 'red' ? 200 : 880,
                     y: yPos,
                     r: 35, color: team === 'red' ? '#ef4444' : '#3b82f6',
-                    type: 'player', team: team
+                    type: 'player', team: team,
+                    angle: team === 'red' ? 0 : Math.PI
                 });
             } else if (delta < 0 && count > 0) {
                 const idx = objects.findLastIndex(o => o.team === team);
@@ -1028,19 +1041,55 @@
                     ctx.strokeStyle = '#333';
                     ctx.lineWidth = 1;
                     ctx.stroke();
-                } else {
+                } else if (obj.type === 'player') {
+                    ctx.save();
+                    ctx.translate(obj.x, obj.y);
+                    ctx.rotate(obj.angle || 0);
+
+                    // Selection highlight
+                    if (selectedObject === obj) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, obj.r + 8, 0, Math.PI * 2);
+                        ctx.strokeStyle = "rgba(59, 130, 246, 0.8)";
+                        ctx.lineWidth = 4;
+                        ctx.stroke();
+                    }
+
+                    // Draw the "Hands" (two white protrusions)
+                    const handR = 12;
+                    const handDist = obj.r + 8; // Slightly longer
+                    const handAngle = 0.6; // ~34 degrees
+
+                    ctx.fillStyle = "white";
+                    ctx.shadowBlur = 5;
+                    ctx.shadowColor = "black";
+                    
+                    // Left Hand
                     ctx.beginPath();
-                    ctx.arc(obj.x, obj.y, obj.r, 0, Math.PI * 2);
+                    ctx.arc(Math.cos(-handAngle) * handDist, Math.sin(-handAngle) * handDist, handR, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Right Hand
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(handAngle) * handDist, Math.sin(handAngle) * handDist, handR, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Draw the main circle
+                    ctx.beginPath();
+                    ctx.arc(0, 0, obj.r, 0, Math.PI * 2);
                     ctx.fillStyle = obj.color;
                     ctx.shadowBlur = 10;
                     ctx.shadowColor = "black";
                     ctx.fill();
-                    ctx.shadowBlur = 0;
-                    if (obj.type === 'player') {
-                        ctx.strokeStyle = "white";
-                        ctx.lineWidth = 3;
-                        ctx.stroke();
-                    }
+                    
+                    // White border
+                    ctx.strokeStyle = "white";
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    ctx.restore();
                 }
                 ctx.restore();
             });
@@ -1059,24 +1108,58 @@
 
         function handlePointerDown(e) {
             const pos = getPointerPos(e);
-            dragTarget = [...objects].reverse().find(o => Math.hypot(o.x - pos.x, o.y - pos.y) < o.r);
-            if (dragTarget) {
+            
+            // Check for object drag or selection
+            const found = [...objects].reverse().find(o => Math.hypot(o.x - pos.x, o.y - pos.y) < o.r + 15);
+            if (found) {
                 isDragging = true;
+                dragTarget = found;
+                selectObject(found);
                 canvas.style.cursor = 'grabbing';
             } else {
                 arrowStart = pos;
+                selectObject(null);
             }
         }
+
+        function selectObject(obj) {
+            selectedObject = obj;
+            const overlay = document.getElementById('rotationOverlay');
+            const slider = document.getElementById('rotationSlider');
+            
+            if (obj && obj.type === 'player') {
+                overlay.classList.remove('hidden');
+                // Convert radians to 0-360 degrees
+                let deg = (obj.angle || 0) * 180 / Math.PI;
+                while (deg < 0) deg += 360;
+                while (deg >= 360) deg -= 360;
+                slider.value = Math.round(deg);
+            } else {
+                overlay.classList.add('hidden');
+            }
+        }
+
+        // Rotation slider event
+        document.getElementById('rotationSlider').oninput = (e) => {
+            if (selectedObject && selectedObject.type === 'player') {
+                selectedObject.angle = e.target.value * Math.PI / 180;
+            }
+        };
+        document.getElementById('closeRotationBtn').onclick = () => {
+            selectObject(null);
+        };
 
         function handlePointerMove(e) {
             if (e.touches && e.touches.length === 0) return;
             const pos = getPointerPos(e);
+
             if (isDragging) {
                 canvas.style.cursor = 'grabbing';
             } else {
-                const hoverTarget = objects.find(o => Math.hypot(o.x - pos.x, o.y - pos.y) < o.r);
+                const hoverTarget = objects.find(o => Math.hypot(o.x - pos.x, o.y - pos.y) < o.r + 15);
                 canvas.style.cursor = hoverTarget ? 'grab' : 'crosshair';
             }
+
             if (isDragging && dragTarget) {
                 dragTarget.x = pos.x;
                 dragTarget.y = pos.y;
@@ -1088,6 +1171,7 @@
         function handlePointerUp(e) {
             if (tempArrow) arrows.push(tempArrow);
             isDragging = false;
+            isRotating = false;
             dragTarget = null;
             arrowStart = null;
             tempArrow = null;
