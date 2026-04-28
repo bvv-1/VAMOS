@@ -180,6 +180,7 @@
             <section class="grid grid-cols-2 gap-2">
                 <button id="resetLayoutBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">配置リセット</button>
                 <button id="resetArrowsBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded font-semibold text-sm">矢印リセット</button>
+                <button id="fullResetBtn" class="col-span-2 py-2 bg-red-800 hover:bg-red-700 rounded font-semibold text-sm">全リセット</button>
             </section>
 
             <section>
@@ -885,6 +886,34 @@
             renderBoardList();
         }
 
+        function fullReset() {
+            if (!window.confirm('保存済みボードを含むすべての情報をリセットします。よろしいですか？')) {
+                return;
+            }
+
+            savedBoards = [];
+            activeBoardIndex = -1;
+            Object.keys(boardTimestampDrafts).forEach((key) => delete boardTimestampDrafts[key]);
+
+            try {
+                localStorage.removeItem(BOARD_STORAGE_KEY);
+            } catch (error) {
+                console.warn('Failed to clear boards from storage:', error);
+            }
+
+            resetLayout();
+            resetArrows();
+
+            if (isVideoLoaded) {
+                video.currentTime = 0;
+            }
+
+            syncBoardTimestampInput(0);
+            updatePlayerUI();
+            updateBoardPlaybackUI();
+            renderBoardList();
+        }
+
         window.changePlayerCount = (team, delta) => {
             const count = objects.filter(o => o.team === team).length;
             if (delta > 0 && count < 11) {
@@ -1190,6 +1219,7 @@
 
         document.getElementById('resetLayoutBtn').onclick = resetLayout;
         document.getElementById('resetArrowsBtn').onclick = resetArrows;
+        document.getElementById('fullResetBtn').onclick = fullReset;
         document.getElementById('resetToInitialScreenBtn').onclick = resetToInitialScreen;
         document.getElementById('saveBoardBtn').onclick = saveCurrentBoard;
         document.getElementById('prevBoardBtn').onclick = goToPrevBoard;
