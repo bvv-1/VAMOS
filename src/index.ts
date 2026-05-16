@@ -3,14 +3,24 @@ import { handleWebhook } from "./routes/webhook";
 import { handleAdmin } from "./routes/admin";
 import { handleGetVideo } from "./routes/videos";
 import { handleVoiceConvert } from "./routes/voice-convert";
+import appHtml from "./routes/app.html";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
 		const path = url.pathname;
 
-		// Admin page (GET /)
+		// App page (GET /)
 		if (path === "/" && request.method === "GET") {
+			return new Response(appHtml, {
+				headers: {
+					"Content-Type": "text/html; charset=utf-8",
+				},
+			});
+		}
+
+		// Admin page (GET /old)
+		if (path === "/old" && request.method === "GET") {
 			return handleAdmin(request, env);
 		}
 
